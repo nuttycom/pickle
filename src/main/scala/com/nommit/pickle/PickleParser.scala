@@ -6,14 +6,14 @@ import scala.util.parsing.combinator.PackratParsers
 case class Data(data: List[Either[String, Tagged]])
 
 object Data {
-  val empty = Data(Nil)
+  val Empty = Data(Nil)
   def str(s: String) = Data(List(Left(s)))
   def tagged(t: Tag, d: Data) = Data(List(Right(Tagged(t, d))))
 }
 
 sealed trait Tag
-case class ShortForm(ident: String, metadata: List[Tagged]) extends Tag
-case class LongForm(data: Data, metadata: List[Tagged]) extends Tag
+case class ShortForm(ident: String, metadata: List[Tagged] = Nil) extends Tag
+case class LongForm(data: Data, metadata: List[Tagged] = Nil) extends Tag
 
 case class Tagged(tag: Tag, data: Data)
 
