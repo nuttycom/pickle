@@ -37,21 +37,28 @@ class ParserSpec extends Specification {
 
   "a lone short form tag without metadata" should {
     "parse correctly" in {
-      PickleParser.parse("@a[asdljadlf;j;ljk]") must_== Data.tagged(ShortForm("a", Nil), Data.str("asdljadlf;j;ljk"))
+      val expected = Data.tagged(ShortForm("a", Nil), Data.str("asdljadlf;j;ljk"))
+      PickleParser.parse("@a[asdljadlf;j;ljk]") must beLike {
+        case PickleParser.Success(`expected`, reader) => reader.atEnd
+      }
     }
   }
 
   "a lone short form tag with metadata" should {
     "parse correctly" in {
-      PickleParser.parse("@a[asdljadlf;j;ljk | @b[foo]]") must_== Data.tagged(
-        ShortForm("a", List(Tagged(ShortForm("b", Nil), Data.str("foo")))), Data.str("asdljadlf;j;ljk")
+      val expected =  Data.tagged(
+        ShortForm("a", List(Tagged(ShortForm("b", Nil), Data.str("foo")))), Data.str("asdljadlf;j;ljk ")
       )
+
+      PickleParser.parse("@a[asdljadlf;j;ljk | @b[foo]]") must beLike {
+        case PickleParser.Success(`expected`, reader) => reader.atEnd
+      }
     }
   }
 
   "simple compound data with a short form tag" should {
     "parse correctly" in {
-      PickleParser.parse("Hi there @a[Joe | @href[http://www.joe.com]]") must_== Data(
+      val expected = Data(
         List(
           Left("Hi there "),
           Right(
@@ -62,6 +69,10 @@ class ParserSpec extends Specification {
           )
         )
       )
+
+      PickleParser.parse("Hi there @a[Joe | @href[http://www.joe.com]]") must beLike {
+        case PickleParser.Success(`expected`, reader) => reader.atEnd
+      }
     }
   }
 }
