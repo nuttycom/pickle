@@ -5,7 +5,7 @@ Pickle
 What, another one?
 ------------------
 
-Pickle is a markup language, and in the current technical landscape creating yet another markup language requires some justification. So, before we get to what Pickle markup looks like,
+Pickle is a markup language, and in the current technilogical landscape creating yet another markup language requires some justification. So, before we get to what Pickle markup looks like,
 let's talk a bit about why it exists.
 
 Fundamentally, the purpose of markup is to attach semantic information to text - to give bits of text meaning that can be used by computers. There are lots of markup languages around, but 
