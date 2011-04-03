@@ -12,37 +12,34 @@ import org.specs.matcher.Matcher
  */
 
 class ParserSpec extends Specification {
-
-  def matchPickleParse(expected: Data) = beLike[PickleParser.ParseResult[Data]] {
+  def matchPickleParse(expected: Doc) = beLike[PickleParser.ParseResult[Doc]] {
     case PickleParser.Success(`expected`, reader) => reader.atEnd
   }
 
   "the pickle parser" should {
     "parse a lone short form tag without metadata" in {
       PickleParser.parse("@a[arbitrary text]") must matchPickleParse(
-        Data.tagged(ShortForm("a"), Data.str("arbitrary text"))
+        Doc.tagged(ShortForm("a"), Doc.text("arbitrary text"))
       )
     }
 
     "parse a lone short form tag with metadata" in {
       PickleParser.parse("@a[arbitrary text | @b[foo]]") must matchPickleParse(
-        Data.tagged(
-          ShortForm("a", List(Tagged(ShortForm("b"), Data.str("foo")))),
-          Data.str("arbitrary text")
+        Doc.tagged(
+          ShortForm("a", List(Tagged(ShortForm("b"), Doc.text("foo")))),
+          Doc.text("arbitrary text")
         )
       )
     }
 
     "parse compound data with a short form tag" in {
       PickleParser.parse("Hi there @a[Joe | @href[http://www.joe.com]]") must matchPickleParse(
-        Data(
+        Doc(
           List(
-            Left("Hi there "),
-            Right(
-              Tagged(
-                ShortForm("a", List(Tagged(ShortForm("href"), Data.str("http://www.joe.com")))),
-                Data.str("Joe")
-              )
+            Text("Hi there "),
+            Tagged(
+              ShortForm("a", List(Tagged(ShortForm("href"), Doc.text("http://www.joe.com")))),
+              Doc.text("Joe")
             )
           )
         )
@@ -51,31 +48,31 @@ class ParserSpec extends Specification {
 
     "parse long form data with a single tag using a short-form identifier" in {
       PickleParser.parse("@[a]arbitrary text@/") must matchPickleParse(
-        Data.tagged(ShortForm("a"), Data.str("arbitrary text"))
+        Doc.tagged(ShortForm("a"), Doc.text("arbitrary text"))
       )
     }
 
     "parse long form data with a single tag using a short-form identifier with metadata" in {
       PickleParser.parse("@[a | @b[foo]]arbitrary text@/") must matchPickleParse(
-        Data.tagged(
-          ShortForm("a", List(Tagged(ShortForm("b"), Data.str("foo")))),
-          Data.str("arbitrary text")
+        Doc.tagged(
+          ShortForm("a", List(Tagged(ShortForm("b"), Doc.text("foo")))),
+          Doc.text("arbitrary text")
         )
       )
     }
 
     "parse long form data with a single tag using a long-form identifier" in {
       PickleParser.parse("@[@ref[foobar]]arbitrary text@/") must matchPickleParse(
-        Data.tagged(
-          LongForm(Data.tagged(ShortForm("ref"), Data.str("foobar"))),
-          Data.str("arbitrary text")
+        Doc.tagged(
+          LongForm(Doc.tagged(ShortForm("ref"), Doc.text("foobar"))),
+          Doc.text("arbitrary text")
         )
       )
     }
 
     "parse long form data using a long-form closing tag" in {
       PickleParser.parse("@[label]arbitrary text@[/label]") must matchPickleParse(
-        Data.tagged(ShortForm("label"), Data.str("arbitrary text"))
+        Doc.tagged(ShortForm("label"), Doc.text("arbitrary text"))
       )
     }
 
@@ -87,20 +84,20 @@ class ParserSpec extends Specification {
 
     "parse nested short-form tags" in {
       PickleParser.parse("@a[arbitrary text | @b[foo | @c[|@bar[ok]]]]") must  matchPickleParse (
-        Data.tagged(
+        Doc.tagged(
           ShortForm(
             "a",
             List(
               Tagged(
                 ShortForm(
                   "b",
-                  List(Tagged(ShortForm("c", List(Tagged(ShortForm("bar"), Data.str("ok")))), Data.Empty))
+                  List(Tagged(ShortForm("c", List(Tagged(ShortForm("bar"), Doc.text("ok")))), Doc.Empty))
                 ),
-                Data.str("foo")
+                Doc.text("foo")
               )
             )
           ),
-          Data.str("arbitrary text")
+          Doc.text("arbitrary text")
         )
       )
     }
@@ -117,24 +114,22 @@ class ParserSpec extends Specification {
       """
 
       PickleParser.parse(sample) must matchPickleParse(
-        Data.tagged(
+        Doc.tagged(
           ShortForm(
             "label",
-            List(Tagged(ShortForm("ref"), Data.str("b")))
+            List(Tagged(ShortForm("ref"), Doc.text("b")))
           ),
-          Data(
+          Doc(
             List(
-              Left("some text\n          "),
-              Right(
-                Tagged(
-                  LongForm(
-                    Data.tagged(ShortForm("ref"), Data.str("a")),
-                    List(Tagged(ShortForm("b"), Data.str("foo")))
-                  ),
-                  Data.str("arbitrary text\n          ")
-                )
+              Text("some text\n          "),
+              Tagged(
+                LongForm(
+                  Doc.tagged(ShortForm("ref"), Doc.text("a")),
+                  List(Tagged(ShortForm("b"), Doc.text("foo")))
+                ),
+                Doc.text("arbitrary text\n          ")
               ),
-              Left("more text\n        ")
+              Text("more text\n        ")
             )
           )
         )
@@ -169,21 +164,19 @@ class ParserSpec extends Specification {
 
       val result = PickleParser.parse(sample)
 
-      result must haveClass[PickleParser.Success[Data]]
+      result must haveClass[PickleParser.Success[Doc]]
       result match {
-        case PickleParser.Success(data, _) =>
-          data.data must haveSize(7)
-          data.data.last.right.get must_== Tagged(
-            ShortForm("a", List(Tagged(ShortForm("href"), Data.str("google.com")))),
-            Data(
+        case PickleParser.Success(doc, _) =>
+          doc.sections must haveSize(7)
+          doc.sections.last must_== Tagged(
+            ShortForm("a", List(Tagged(ShortForm("href"), Doc.text("google.com")))),
+            Doc(
               List(
-                Right(Tagged(ShortForm("a", List(Tagged(ShortForm("href"), Data.str("google.com")))), Data.str("foo"))),
-                Right(Tagged(ShortForm("label", List(Tagged(ShortForm("ref"), Data.str("null")))), Data.Empty)),
-                Right(
-                  Tagged(
-                    ShortForm("a", List(Tagged(ShortForm("href"), Data.tagged(ShortForm("ref"), Data.str("null"))))),
-                    Data.str("foo")
-                  )
+                Tagged(ShortForm("a", List(Tagged(ShortForm("href"), Doc.text("google.com")))), Doc.text("foo")),
+                Tagged(ShortForm("label", List(Tagged(ShortForm("ref"), Doc.text("null")))), Doc.Empty),
+                Tagged(
+                  ShortForm("a", List(Tagged(ShortForm("href"), Doc.tagged(ShortForm("ref"), Doc.text("null"))))),
+                  Doc.text("foo")
                 )
               )
             )
