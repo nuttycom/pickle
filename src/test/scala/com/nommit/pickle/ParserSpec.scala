@@ -19,14 +19,14 @@ class ParserSpec extends Specification {
   "the pickle parser" should {
     "parse a lone short form tag without metadata" in {
       PickleParser.parse("@a[arbitrary text]") must matchPickleParse(
-        Doc.tagged(ShortForm("a"), Doc.text("arbitrary text"))
+        Doc.tagged(Tag("a"), Doc.text("arbitrary text"))
       )
     }
 
     "parse a lone short form tag with metadata" in {
       PickleParser.parse("@a[arbitrary text | @b[foo]]") must matchPickleParse(
         Doc.tagged(
-          ShortForm("a", List(Tagged(ShortForm("b"), Doc.text("foo")))),
+          Tag("a", Metadata(Tagged(Tag("b"), Doc.text("foo")))),
           Doc.text("arbitrary text")
         )
       )
@@ -35,12 +35,10 @@ class ParserSpec extends Specification {
     "parse compound data with a short form tag" in {
       PickleParser.parse("Hi there @a[Joe | @href[http://www.joe.com]]") must matchPickleParse(
         Doc(
-          List(
-            Text("Hi there "),
-            Tagged(
-              ShortForm("a", List(Tagged(ShortForm("href"), Doc.text("http://www.joe.com")))),
-              Doc.text("Joe")
-            )
+          Text("Hi there "),
+          Tagged(
+            Tag("a", Metadata(Tagged(Tag("href"), Doc.text("http://www.joe.com")))),
+            Doc.text("Joe")
           )
         )
       )
@@ -48,14 +46,14 @@ class ParserSpec extends Specification {
 
     "parse long form data with a single tag using a short-form identifier" in {
       PickleParser.parse("@[a]arbitrary text@/") must matchPickleParse(
-        Doc.tagged(ShortForm("a"), Doc.text("arbitrary text"))
+        Doc.tagged(Tag("a"), Doc.text("arbitrary text"))
       )
     }
 
     "parse long form data with a single tag using a short-form identifier with metadata" in {
       PickleParser.parse("@[a | @b[foo]]arbitrary text@/") must matchPickleParse(
         Doc.tagged(
-          ShortForm("a", List(Tagged(ShortForm("b"), Doc.text("foo")))),
+          Tag("a", Metadata(Tagged(Tag("b"), Doc.text("foo")))),
           Doc.text("arbitrary text")
         )
       )
@@ -64,7 +62,7 @@ class ParserSpec extends Specification {
     "parse long form data with a single tag using a long-form identifier" in {
       PickleParser.parse("@[@ref[foobar]]arbitrary text@/") must matchPickleParse(
         Doc.tagged(
-          LongForm(Doc.tagged(ShortForm("ref"), Doc.text("foobar"))),
+          MetaTag(Doc.tagged(Tag("ref"), Doc.text("foobar"))),
           Doc.text("arbitrary text")
         )
       )
@@ -72,26 +70,26 @@ class ParserSpec extends Specification {
 
     "parse long form data using a long-form closing tag" in {
       PickleParser.parse("@[label]arbitrary text@[/label]") must matchPickleParse(
-        Doc.tagged(ShortForm("label"), Doc.text("arbitrary text"))
+        Doc.tagged(Tag("label"), Doc.text("arbitrary text"))
       )
     }
 
     "fail to parse long form data using a mismatched long-form closing tag" in {
       PickleParser.parse("@[label]arbitrary text@[/labex]") must beLike {
-        case PickleParser.Failure(msg, next) => msg.startsWith("Unable to match long form closing tag")
+        case PickleParser.Failure(msg, next) => msg.startsWith("Unable to match metatag closing tag")
       }
     }
 
     "parse nested short-form tags" in {
       PickleParser.parse("@a[arbitrary text | @b[foo | @c[|@bar[ok]]]]") must  matchPickleParse (
         Doc.tagged(
-          ShortForm(
+          Tag(
             "a",
-            List(
+            Metadata(
               Tagged(
-                ShortForm(
+                Tag(
                   "b",
-                  List(Tagged(ShortForm("c", List(Tagged(ShortForm("bar"), Doc.text("ok")))), Doc.Empty))
+                  Metadata(Tagged(Tag("c", Metadata(Tagged(Tag("bar"), Doc.text("ok")))), Doc.Empty))
                 ),
                 Doc.text("foo")
               )
@@ -115,22 +113,20 @@ class ParserSpec extends Specification {
 
       PickleParser.parse(sample) must matchPickleParse(
         Doc.tagged(
-          ShortForm(
+          Tag(
             "label",
-            List(Tagged(ShortForm("ref"), Doc.text("b")))
+            Metadata(Tagged(Tag("ref"), Doc.text("b")))
           ),
           Doc(
-            List(
-              Text("some text\n          "),
-              Tagged(
-                LongForm(
-                  Doc.tagged(ShortForm("ref"), Doc.text("a")),
-                  List(Tagged(ShortForm("b"), Doc.text("foo")))
-                ),
-                Doc.text("arbitrary text\n          ")
+            Text("some text\n          "),
+            Tagged(
+              MetaTag(
+                Doc.tagged(Tag("ref"), Doc.text("a")),
+                Metadata(Tagged(Tag("b"), Doc.text("foo")))
               ),
-              Text("more text\n        ")
-            )
+              Doc.text("arbitrary text\n          ")
+            ),
+            Text("more text\n        ")
           )
         )
       )
@@ -169,15 +165,13 @@ class ParserSpec extends Specification {
         case PickleParser.Success(doc, _) =>
           doc.sections must haveSize(7)
           doc.sections.last must_== Tagged(
-            ShortForm("a", List(Tagged(ShortForm("href"), Doc.text("google.com")))),
+            Tag("a", Metadata(Tagged(Tag("href"), Doc.text("google.com")))),
             Doc(
-              List(
-                Tagged(ShortForm("a", List(Tagged(ShortForm("href"), Doc.text("google.com")))), Doc.text("foo")),
-                Tagged(ShortForm("label", List(Tagged(ShortForm("ref"), Doc.text("null")))), Doc.Empty),
-                Tagged(
-                  ShortForm("a", List(Tagged(ShortForm("href"), Doc.tagged(ShortForm("ref"), Doc.text("null"))))),
-                  Doc.text("foo")
-                )
+              Tagged(Tag("a", Metadata(Tagged(Tag("href"), Doc.text("google.com")))), Doc.text("foo")),
+              Tagged(Tag("label", Metadata(Tagged(Tag("ref"), Doc.text("null")))), Doc.Empty),
+              Tagged(
+                Tag("a", Metadata(Tagged(Tag("href"), Doc.tagged(Tag("ref"), Doc.text("null"))))),
+                Doc.text("foo")
               )
             )
           )
