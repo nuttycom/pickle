@@ -1,7 +1,6 @@
 package com.nommit.pickle
 
 import org.specs._
-import org.specs.matcher.Matcher
 
 /**
  * Created by IntelliJ IDEA.

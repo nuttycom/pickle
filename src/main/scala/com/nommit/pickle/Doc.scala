@@ -51,11 +51,10 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
     val (left, right) = sections splitAt n
     (new Doc(left), new Doc(right))
   }
+
+  def toMetadata(implicit ev: S <:< Complex[Section]) = new Metadata(sections.map(ev))
 }
 
-class Metadata private[pickle](private[pickle] override val sections: Vector[Complex[Section]]) extends Doc[Complex[Section]](sections) {
-  override protected[this] def newBuilder = Metadata.newBuilder
-}
 
 object Metadata {
   val Empty = new Metadata(Vector.empty)
@@ -64,15 +63,7 @@ object Metadata {
   def newBuilder = Vector.newBuilder[Complex[Section]].mapResult(new Metadata(_))
 }
 
-
-
-
-
-
-
-
-
-
-
-
+class Metadata private[pickle](private[pickle] override val sections: Vector[Complex[Section]]) extends Doc[Complex[Section]](sections) {
+  override protected[this] def newBuilder = Metadata.newBuilder
+}
 
