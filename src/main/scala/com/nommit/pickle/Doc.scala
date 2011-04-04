@@ -16,6 +16,11 @@ object Doc {
   def unapplySeq[S <: Section](doc: Doc[S]) = Some(doc.sections)
 
   def newBuilder[S <: Section] = Vector.newBuilder[S].mapResult(new Doc(_))
+
+  implicit def canBuildFrom[S <: Section]: CanBuildFrom[Traversable[S], S, Doc[S]] = new CanBuildFrom[Traversable[S], S, Doc[S]] {
+    override def apply() = newBuilder
+    override def apply(from: Traversable[S]) = newBuilder ++= from
+  }
 }
 
 class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S]) extends IndexedSeq[S] with IndexedSeqLike[S, Doc[S]] {
@@ -61,9 +66,13 @@ object Metadata {
   def apply[S <: Section](s: Complex[S]*): Metadata = new Metadata(Vector(s: _*))
   def unapplySeq(m: Metadata) = Doc.unapplySeq(m)
   def newBuilder = Vector.newBuilder[Complex[Section]].mapResult(new Metadata(_))
+  implicit def canBuildFrom[S <: Section]: CanBuildFrom[Traversable[Complex[S]], Complex[S], Metadata] = new CanBuildFrom[Traversable[Complex[S]], Complex[S], Metadata] {
+    override def apply() = newBuilder
+    override def apply(from: Traversable[Complex[S]]) = newBuilder ++= from
+  }
 }
 
 class Metadata private[pickle](private[pickle] override val sections: Vector[Complex[Section]]) extends Doc[Complex[Section]](sections) {
   override protected[this] def newBuilder = Metadata.newBuilder
+  override def equals(other: Any) = other.isInstanceOf[Metadata] && super.equals(other)
 }
-

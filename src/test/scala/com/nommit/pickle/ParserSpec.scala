@@ -2,14 +2,6 @@ package com.nommit.pickle
 
 import org.specs._
 
-/**
- * Created by IntelliJ IDEA.
- * User: nuttycom
- * Date: 4/1/11
- * Time: 9:55 AM
- * To change this template use File | Settings | File Templates.
- */
-
 class ParserSpec extends Specification {
   def matchPickleParse[S <: Section](expected: Doc[S]) = beLike[PickleParser.ParseResult[Doc[S]]] {
     case PickleParser.Success(`expected`, reader) => reader.atEnd

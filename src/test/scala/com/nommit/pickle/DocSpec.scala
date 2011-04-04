@@ -11,11 +11,24 @@ class DocSpec extends Specification {
     }
   }
 
-  "a document composed nested complex sections" should {
-    val doc: Doc[Complex[Complex[Primitive]]] = Doc(Complex(Tag("a"), Doc.empty[Complex[Primitive]]))
-
+  "a complex document" should {
     "be convertible to metadata" in {
-      doc.toMetadata must_== Metadata(Complex(Tag("a"), Doc.empty[Complex[Primitive]]))
+      "when the doc has just one level of complexity" >> {
+        val doc: Doc[Complex[Primitive]] = Doc(Complex(Tag("a"), Doc.empty[Primitive]))
+        doc.toMetadata must_== Metadata(Complex(Tag("a"), Doc.empty[Primitive]))
+      }
+
+      "when the doc has nested complex structure" >> {
+        val doc: Doc[Complex[Complex[Primitive]]] = Doc(Complex(Tag("a"), Doc.empty[Complex[Primitive]]))
+        doc.toMetadata must_== Metadata(Complex(Tag("a"), Doc.empty[Complex[Primitive]]))
+      }
+    }
+  }
+
+  "a metadata document" should {
+    "be appendable as metadata" in {
+      val metadata: Metadata = Metadata.Empty :+ Complex(Tag("a"), Doc.empty[Primitive])
+      metadata must_== Metadata(Complex(Tag("a"), Doc.empty[Primitive]))
     }
   }
 }
