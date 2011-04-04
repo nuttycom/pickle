@@ -3,33 +3,6 @@ package com.nommit.pickle
 import scala.util.parsing.combinator.RegexParsers
 import scala.util.parsing.combinator.PackratParsers
 
-case class Doc private[pickle] (sections: List[Section])
-
-object Doc {
-  val Empty = Doc(Nil)
-  def text(s: String) = Doc(List(Text(s)))
-  def tagged(t: Semantics, d: Doc) = Doc(List(Tagged(t, d)))
-  def apply(s: Section*): Doc = Doc(s.toList)
-}
-
-case class Metadata private[pickle] (elements: List[Tagged])
-
-object Metadata {
-  val Empty = Metadata(Nil)
-  def apply(m: Tagged*): Metadata = Metadata(m.toList)
-}
-
-sealed trait Semantics {
-  def metadata: Metadata
-}
-
-case class Tag(ident: String, metadata: Metadata = Metadata.Empty) extends Semantics
-case class MetaTag(ident: Doc,  metadata: Metadata = Metadata.Empty) extends Semantics
-
-sealed trait Section
-case class Tagged(tag: Semantics, doc: Doc) extends Section
-case class Text(text: String) extends Section
-
 object PickleParser extends RegexParsers with PackratParsers {
   def parse(s: String) = parseAll(doc, s)
 
