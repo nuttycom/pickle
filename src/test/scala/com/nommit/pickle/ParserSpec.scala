@@ -12,7 +12,7 @@ import org.specs.matcher.Matcher
  */
 
 class ParserSpec extends Specification {
-  def matchPickleParse(expected: Doc) = beLike[PickleParser.ParseResult[Doc]] {
+  def matchPickleParse[S <: Section](expected: Doc[S]) = beLike[PickleParser.ParseResult[Doc[S]]] {
     case PickleParser.Success(`expected`, reader) => reader.atEnd
   }
 
@@ -26,7 +26,7 @@ class ParserSpec extends Specification {
     "parse a lone short form tag with metadata" in {
       PickleParser.parse("@a[arbitrary text | @b[foo]]") must matchPickleParse(
         Doc.tagged(
-          Tag("a", Metadata(Tagged(Tag("b"), Doc.text("foo")))),
+          Tag("a", Metadata(Complex(Tag("b"), Doc.text("foo")))),
           Doc.text("arbitrary text")
         )
       )
@@ -35,9 +35,9 @@ class ParserSpec extends Specification {
     "parse compound data with a short form tag" in {
       PickleParser.parse("Hi there @a[Joe | @href[http://www.joe.com]]") must matchPickleParse(
         Doc(
-          Text("Hi there "),
-          Tagged(
-            Tag("a", Metadata(Tagged(Tag("href"), Doc.text("http://www.joe.com")))),
+          Primitive("Hi there "),
+          Complex(
+            Tag("a", Metadata(Complex(Tag("href"), Doc.text("http://www.joe.com")))),
             Doc.text("Joe")
           )
         )
@@ -53,7 +53,7 @@ class ParserSpec extends Specification {
     "parse long form data with a single tag using a short-form identifier with metadata" in {
       PickleParser.parse("@[a | @b[foo]]arbitrary text@/") must matchPickleParse(
         Doc.tagged(
-          Tag("a", Metadata(Tagged(Tag("b"), Doc.text("foo")))),
+          Tag("a", Metadata(Complex(Tag("b"), Doc.text("foo")))),
           Doc.text("arbitrary text")
         )
       )
@@ -86,10 +86,10 @@ class ParserSpec extends Specification {
           Tag(
             "a",
             Metadata(
-              Tagged(
+              Complex(
                 Tag(
                   "b",
-                  Metadata(Tagged(Tag("c", Metadata(Tagged(Tag("bar"), Doc.text("ok")))), Doc.Empty))
+                  Metadata(Complex(Tag("c", Metadata(Complex(Tag("bar"), Doc.text("ok")))), Doc.empty[Section]))
                 ),
                 Doc.text("foo")
               )
@@ -115,18 +115,18 @@ class ParserSpec extends Specification {
         Doc.tagged(
           Tag(
             "label",
-            Metadata(Tagged(Tag("ref"), Doc.text("b")))
+            Metadata(Complex(Tag("ref"), Doc.text("b")))
           ),
           Doc(
-            Text("some text\n          "),
-            Tagged(
+            Primitive("some text\n          "),
+            Complex(
               MetaTag(
                 Doc.tagged(Tag("ref"), Doc.text("a")),
-                Metadata(Tagged(Tag("b"), Doc.text("foo")))
+                Metadata(Complex(Tag("b"), Doc.text("foo")))
               ),
               Doc.text("arbitrary text\n          ")
             ),
-            Text("more text\n        ")
+            Primitive("more text\n        ")
           )
         )
       )
@@ -160,17 +160,17 @@ class ParserSpec extends Specification {
 
       val result = PickleParser.parse(sample)
 
-      result must haveClass[PickleParser.Success[Doc]]
+      result must haveClass[PickleParser.Success[Doc[Section]]]
       result match {
         case PickleParser.Success(doc, _) =>
           doc.sections must haveSize(7)
-          doc.sections.last must_== Tagged(
-            Tag("a", Metadata(Tagged(Tag("href"), Doc.text("google.com")))),
+          doc.sections.last must_== Complex(
+            Tag("a", Metadata(Complex(Tag("href"), Doc.text("google.com")))),
             Doc(
-              Tagged(Tag("a", Metadata(Tagged(Tag("href"), Doc.text("google.com")))), Doc.text("foo")),
-              Tagged(Tag("label", Metadata(Tagged(Tag("ref"), Doc.text("null")))), Doc.Empty),
-              Tagged(
-                Tag("a", Metadata(Tagged(Tag("href"), Doc.tagged(Tag("ref"), Doc.text("null"))))),
+              Complex(Tag("a", Metadata(Complex(Tag("href"), Doc.text("google.com")))), Doc.text("foo")),
+              Complex(Tag("label", Metadata(Complex(Tag("ref"), Doc.text("null")))), Doc.empty[Section]),
+              Complex(
+                Tag("a", Metadata(Complex(Tag("href"), Doc.tagged(Tag("ref"), Doc.text("null"))))),
                 Doc.text("foo")
               )
             )
