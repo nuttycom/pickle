@@ -168,6 +168,26 @@ class ParserSpec extends Specification {
           )
       }
     }
+
+    "parse a document of just primitives" in {
+      val sample = "#[123 45th St. | 678 90th St.]"
+      PickleParser.parse(sample) must matchPickleParse(
+        Doc(
+          Primitive("123 45th St."),
+          Primitive("678 90th St.")
+        )
+      )
+    }
+
+    "parse a document of primitives with some escaping" in {
+      val sample = "#[123 45th St. \\@ \\| | 678 90th St.]"
+      PickleParser.parse(sample) must matchPickleParse(
+        Doc(
+          Primitive("123 45th St. @ |"),
+          Primitive("678 90th St.")
+        )
+      )
+    }
   }
 
 }

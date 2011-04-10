@@ -10,9 +10,17 @@ object PickleParser extends RegexParsers with PackratParsers {
   // or would confuse the parser can be used as an identifier. Bring on your Unicode!
   val Ident = """([^@\[\]\s\p{Cntrl}]+)""".r
 
-  lazy val doc: PackratParser[Doc[Section]] = rep(tagged | text).map(Doc(_: _*))
+  lazy val doc: PackratParser[Doc[Section]] = primitives | rep(tagged | ptext).map(Doc(_: _*))
 
-  def text: Parser[Primitive] = """([^@\\]|\\@)+""".r ^^ (s => Primitive(s))
+  def primitives: PackratParser[Doc[Primitive]] = "#[" ~> repsep(ntext, "\\s*\\|\\s*".r) <~ "]" ^^ {
+    values => Doc(values.map(v => Primitive(v.trim)): _*)
+  }
+
+  def text: Parser[String] = """([^@\\]|\\@)+""".r ^^ unescape
+  def ptext: Parser[Primitive] = text.map(Primitive(_))
+
+  def ntext: Parser[String] = """([^|@\\\]\[]|\\@|\\\||\\ )+""".r ^^ unescape
+  def pntext: Parser[Primitive] = ntext.map(Primitive(_))
 
   lazy val tagged: PackratParser[Complex[Section]] = (shortForm | longForm)
 
@@ -37,9 +45,10 @@ object PickleParser extends RegexParsers with PackratParsers {
     case d ~ m => (d, Metadata(m.flatten.toSeq: _*))
   }
 
-  def ntext: Parser[Primitive] = """([^|@\\\]\[]|\\@|\\\||\\ )+""".r ^^ (s => Primitive(s))
 
-  lazy val ndoc: PackratParser[Doc[Section]] = rep(tagged | ntext).map(
+  def unescape(s: String) = s.replaceAll("""\\(?!\\)""", "")
+
+  lazy val ndoc: PackratParser[Doc[Section]] = rep(tagged | pntext).map(
     l =>  Doc(
       l.foldRight(List.empty[Section]) {
         case (Primitive(s), Nil) =>
