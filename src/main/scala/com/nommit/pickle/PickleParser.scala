@@ -3,16 +3,18 @@ package com.nommit.pickle
 import scala.util.parsing.combinator.RegexParsers
 import scala.util.parsing.combinator.PackratParsers
 
-object PickleParser extends RegexParsers with PackratParsers {
+class PickleParser extends RegexParsers with PackratParsers {
   def parse(s: String) = parseAll(doc, s)
 
   // Just about any string that doesn't include spaces, control characters
   // or would confuse the parser can be used as an identifier. Bring on your Unicode!
   val Ident = """([^@\[\]\s\p{Cntrl}]+)""".r
 
-  lazy val doc: PackratParser[Doc[Section]] = rep(tagged | text).map(Doc(_: _*))
+  lazy val doc: PackratParser[Doc[Section]] = rep(tagged | text | "@@") ^^ {
+    values => Doc(fixWhitespace(values.collect { case s: Section => s }) : _*)
+  }
 
-  def text: Parser[Primitive] = """([^@\\]|\\@)+""".r ^^ (s => Primitive(s))
+  def text: Parser[Primitive] = """([^@\\]|\\@)+""".r ^^ (Primitive compose unescape)
 
   lazy val tagged: PackratParser[Complex[Section]] = (shortForm | longForm)
 
@@ -33,24 +35,37 @@ object PickleParser extends RegexParsers with PackratParsers {
 
   lazy val longFormClose: PackratParser[Option[String]] = ("@/" ^^ (_ => None) | ("@[/" ~> Ident <~ "]").map(Some(_)))
 
-  lazy val tagbody: PackratParser[(Doc[Section], Metadata)] = "[" ~> ndoc ~ opt("|" ~> rep1sep(shortForm, "\\w+".r)) <~ "]" ^^ {
+  lazy val tagbody: PackratParser[(Doc[Section], Metadata)] = "[" ~> ndoc ~ opt("\\s*#\\s*".r ~> rep1sep(shortForm, "\\w+".r)) <~ "]" ^^ {
     case d ~ m => (d, Metadata(m.flatten.toSeq: _*))
   }
 
-  def ntext: Parser[Primitive] = """([^|@\\\]\[]|\\@|\\\||\\ )+""".r ^^ (s => Primitive(s))
+  def ntext: Parser[Primitive] = """([^|\[\]\\@#]|\\\||\\\[|\\\]|\\@|\\#|\\ )+""".r ^^ (Primitive compose unescape)
 
-  lazy val ndoc: PackratParser[Doc[Section]] = rep(tagged | ntext).map(
-    l =>  Doc(
-      l.foldRight(List.empty[Section]) {
-        case (Primitive(s), Nil) =>
-          // strip trailing unescaped spaces from the last element
-          val ss = s.replaceAll("""(?<!\\)\s+$""", "")
-          // if what remains is empty, drop the element
-          if (ss.isEmpty) Nil else Primitive(ss) :: Nil
+  lazy val ndoc: PackratParser[Doc[Section]] = rep(tagged | ntext | "(@@|\\|)".r) ^^ {
+    values => Doc(fixWhitespace(values) : _*)
+  }
 
-        case (elem, rest) => elem :: rest
-      } : _*
-    )
-  )
+  private val unescape = (s: String) => s.replaceAll("""\\(?!\\)""", "")
+
+  private def fixWhitespace(values: List[AnyRef]): List[Section] = values.foldRight(List.empty[Section]) {
+    case (Primitive(s1), Primitive(s2) :: rest) =>
+      val s1s = s1.replaceAll("""(?<!\\)\s+$""", "")
+      val s2s = s2.replaceAll("""^\s+""", "")
+
+      if (s1s.isEmpty && s2s.isEmpty)          rest
+      else if (s1s.isEmpty)  Primitive(s2s) :: rest
+      else if (s2s.isEmpty)  Primitive(s1s) :: rest
+      else Primitive(s1s) :: Primitive(s2s) :: rest
+
+    case (Primitive(s), Nil) =>
+      // strip trailing unescaped spaces from the last element; if what remains is empty, drop the element
+      val ss = s.replaceAll("""(?<!\\)\s+$""", "")
+      if (ss.isEmpty) Nil else Primitive(ss) :: Nil
+
+    case (elem: Section, rest) => elem :: rest
+    case (_, rest) => rest
+  }
 }
+
+object PickleParser extends PickleParser
 

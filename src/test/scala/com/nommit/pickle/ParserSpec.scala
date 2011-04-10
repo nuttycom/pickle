@@ -15,7 +15,7 @@ class ParserSpec extends Specification {
     }
 
     "parse a lone short form tag with metadata" in {
-      PickleParser.parse("@a[arbitrary text | @b[foo]]") must matchPickleParse(
+      PickleParser.parse("@a[arbitrary text # @b[foo]]") must matchPickleParse(
         Doc.tagged(
           Tag("a", Metadata(Complex(Tag("b"), Doc.text("foo")))),
           Doc.text("arbitrary text")
@@ -24,7 +24,7 @@ class ParserSpec extends Specification {
     }
 
     "parse compound data with a short form tag" in {
-      PickleParser.parse("Hi there @a[Joe | @href[http://www.joe.com]]") must matchPickleParse(
+      PickleParser.parse("Hi there @a[Joe # @href[http://www.joe.com]]") must matchPickleParse(
         Doc(
           Primitive("Hi there "),
           Complex(
@@ -42,7 +42,7 @@ class ParserSpec extends Specification {
     }
 
     "parse long form data with a single tag using a short-form identifier with metadata" in {
-      PickleParser.parse("@[a | @b[foo]]arbitrary text@/") must matchPickleParse(
+      PickleParser.parse("@[a # @b[foo]]arbitrary text@/") must matchPickleParse(
         Doc.tagged(
           Tag("a", Metadata(Complex(Tag("b"), Doc.text("foo")))),
           Doc.text("arbitrary text")
@@ -72,7 +72,7 @@ class ParserSpec extends Specification {
     }
 
     "parse nested short-form tags" in {
-      PickleParser.parse("@a[arbitrary text | @b[foo | @c[|@bar[ok]]]]") must  matchPickleParse (
+      PickleParser.parse("@a[arbitrary text # @b[foo # @c[#@bar[ok]]]]") must  matchPickleParse (
         Doc.tagged(
           Tag(
             "a",
@@ -93,9 +93,9 @@ class ParserSpec extends Specification {
 
     "parse nested long-form tags" in {
       val sample = """
-        @[label | @ref[b]]
+        @[label # @ref[b]]
           some text
-          @[@ref[a] | @b[foo]]
+          @[@ref[a] # @b[foo]]
             arbitrary text
           @/
           more text
@@ -115,9 +115,9 @@ class ParserSpec extends Specification {
                 Doc.tagged(Tag("ref"), Doc.text("a")),
                 Metadata(Complex(Tag("b"), Doc.text("foo")))
               ),
-              Doc.text("arbitrary text\n          ")
+              Doc.text("arbitrary text")
             ),
-            Primitive("more text\n        ")
+            Primitive("more text")
           )
         )
       )
@@ -125,27 +125,27 @@ class ParserSpec extends Specification {
 
     "parse a complex document" in {
       val sample = """
-        @a[arbitrary text | @b[foo | @c[|@bar[ok]]]]
+        @a[arbitrary text # @b[foo # @c[#@bar[ok]]]]
 
-        @[label | @ref[b]]
-          @[@ref[a] | @b[foo]]
+        @[label # @ref[b]]
+          @[@ref[a] # @b[foo]]
             as;ldkjal;dsj
           @/
         @[/label]
 
         Some More Arbitrary Text
 
-        @[label | @ref[a]]
+        @[label # @ref[a]]
           @ref[b]
         @/
 
-        @a[Hi there     \ | @href[stuff]]
-        @a[Hi there \| here's a pipe symbol \|\ | @href[google.com]]
+        @a[Hi there     \ # @href[stuff]]
+        @a[Hi there \| here's a pipe symbol \|\ # @href[google.com]]
 
-        @[a | @href[google.com]]
-          @a[foo | @href[google.com]]
-          @label[|@ref[null]]
-          @a[foo | @href[@ref[null]]]
+        @[a # @href[google.com]]
+          @a[foo # @href[google.com]]
+          @label[#@ref[null]]
+          @a[foo # @href[@ref[null]]]
         @/
       """
 
@@ -167,6 +167,42 @@ class ParserSpec extends Specification {
             )
           )
       }
+    }
+
+    "parse a document of just primitives" in {
+      val sample = "123 45th St. @@ 678 90th St."
+      PickleParser.parse(sample) must matchPickleParse(
+        Doc(
+          Primitive("123 45th St."),
+          Primitive("678 90th St.")
+        )
+      )
+    }
+
+    "parse a document of primitives with some escaping" in {
+      val sample = "@list[123 45th St. \\@ \\| | 678 90th St.]"
+      PickleParser.parse(sample) must matchPickleParse(
+        Doc(
+          Complex(
+            Tag("list"),
+            Doc(Primitive("123 45th St. @ |"), Primitive("678 90th St."))
+          )
+        )
+      )
+    }
+
+    "parse a mixed document" in {
+      val sample = "123 45th St. @@ 678 90th St. @a[Link # @href[google.com]]"
+      PickleParser.parse(sample) must matchPickleParse(
+        Doc(
+          Primitive("123 45th St."),
+          Primitive("678 90th St. "),
+          Complex(
+            Tag("a", Metadata(Complex(Tag("href"), Doc.text("google.com")))),
+            Doc.text("Link")
+          )
+        )
+      )
     }
   }
 
