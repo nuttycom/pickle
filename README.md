@@ -37,12 +37,14 @@ Short Form
 
 Short Pickle tags have the form:
 
-    @tagname[tagdata | metadata]
+    @tagname[tagdata # metadata]
 
 *tagname* is an opaque string identifying the semantic domain. There are very few restrictions on the characters that can be used in a tag name; it cannot contain whitespace, and the 
 characters '@', '[' and ']' (as well as control characters) are reserved, but any other character is accepted.
 
-*tagdata* is arbitrary Pickle data, which can contain text and markup. Literal '|' characters in text (that is not itself nested in a tag) can be escaped with a backslash.
+*tagdata* is arbitrary Pickle data, which can contain text and markup. Literal '#' characters in section of text (that is not itself nested in a tag) can be escaped with a backslash.
+In the tag data, if you want to have multiple primitive text sections, you may separate these sections with either '|' or '@@'. This allows for easy representation of collections
+of simple literal values. Literal '|' and '@' characters may be escaped with backslashes in the same fashion as the '#' character.
 
 *metadata* is a space-separated list of short Pickle tags.
 
@@ -51,16 +53,24 @@ Long Form
 
 Long Pickle tags can take two forms which differ only in the way that they are closed.
 
-    @[tagnamedata | metadata]
+    @[tagnamedata # metadata]
       tagdata
     @/
 
 or
 
-    @[tagname | metadata]
+    @[tagname # metadata]
       tagdata
     @[/tagname]
 
-The former is generally preferred, but the latter is accepted mostly for the purposes where it's handy to document the end of a long marked-up block as corresponding to a particular opening tag.
+The former is generally preferred, but the latter is accepted mostly for the purposes where it's handy to document the end of a long marked-up block as corresponding to a particular opening tag. Primitive text
+sections in the long form tag may be separated with the '@@' character pair.
 
-Here, the components of the tag have the same meanings as with the short form, with the exception of the *tagnamedata* field of the first form, which is termed the short-close long form. In the short-close long form, the limitation on tag name format is lifted, and any valid Pickle document can serve as the tag identifier. The reason for this will be clarified later when we talk about tag references.
+Here, the components of the tag have the same meanings as with the short form, with the exception of the *tagnamedata* field of the first form, which is termed the short-close long form. 
+In the short-close long form, the limitation on tag name format is lifted, and any valid Pickle document can serve as the tag's semantic identifier. This feature exists principally for
+the sake of symmetry, but may have applications toward allowing variable semantics for situations where one may want to embed an external Pickle document.
+
+Semantics
+---------
+
+Coming soon!
