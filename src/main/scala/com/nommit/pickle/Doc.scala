@@ -3,6 +3,7 @@ package com.nommit.pickle
 import collection.{IndexedSeqLike, TraversableLike}
 import collection.immutable.{IndexedSeq, Vector}
 import collection.generic.{SeqFactory, CanBuildFrom, HasNewBuilder}
+import scalaz._
 
 object Doc {
   def empty[S <: Section] = new Doc[S](Vector.empty)
