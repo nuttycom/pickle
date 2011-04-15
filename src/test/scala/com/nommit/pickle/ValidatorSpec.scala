@@ -33,7 +33,6 @@ class ValidatorSpec extends Specification {
         """
       )
 
-      println(validator.validate(d))
       validator.validate(d) must_== Success(
         Doc(
           Complex(

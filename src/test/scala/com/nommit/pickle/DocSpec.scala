@@ -6,7 +6,7 @@ class DocSpec extends Specification {
 
   "a primitive document" should {
     "not be convertible to metadata" in {
-      // this won't compile
+      // this shouldn't compile
       //Doc(Primitive("a")).toMetadata must beEmpty
     }
   }
@@ -29,6 +29,35 @@ class DocSpec extends Specification {
     "be appendable as metadata" in {
       val metadata: Metadata = Metadata.Empty :+ Complex(Tag("a"), Doc.empty[Primitive])
       metadata must_== Metadata(Complex(Tag("a"), Doc.empty[Primitive]))
+    }
+  }
+
+  "a multipart document" should {
+    "split into its component pieces correctly" in {
+      val result = Doc(Primitive("a"), Primitive("b"), Separator, Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c"), Separator, Primitive("d")).split(true)
+      result must_== Vector(
+        Doc(Primitive("a"), Primitive("b")),
+        Doc(Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c")) ,
+        Doc(Primitive("d"))
+      )
+    }
+
+    "split correctly with leading separators" in {
+      val result = Doc(Separator, Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c"), Separator, Primitive("d")).split(true)
+      println(result)
+      result must_== Vector(
+        Doc(Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c")) ,
+        Doc(Primitive("d"))
+      )
+    }
+
+    "split correctly with trailing separators" in {
+      val result = Doc(Primitive("a"), Primitive("b"), Separator, Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c"), Separator).split(true)
+      println(result)
+      result must_== Vector(
+        Doc(Primitive("a"), Primitive("b")),
+        Doc(Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c"))
+      )
     }
   }
 }

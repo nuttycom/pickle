@@ -59,17 +59,18 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
     (new Doc(left), new Doc(right))
   }
 
-  //def split: Vector[Doc[S]] = {
-  //  @tailrec def inSplit(lb: List[A], acc: Vector[Vector[B]]): Vector[Vector[B]] = lb match {
-  //    case x :: xs => inSplit(xs, f(x).map(v => acc.init :+ (acc.last :+ v)).getOrElse(acc :+ Vector.empty))
-  //    case Nil     => acc
-  //  }
+  def split(removeEmpty: Boolean = true): Vector[Doc[S]] = {
+    @tailrec def _split(s: Vector[S], acc: Vector[Vector[S]]): Vector[Vector[S]] =  {
+      if (s.isEmpty) acc
+      else if (s.head == Separator) _split(s.tail, acc :+ Vector.empty[S])
+      else _split(s.tail, acc.init :+ (acc.last :+ s.head))
+    }
 
-  //  inSplit(l, Vector.empty)
-  //}
+    _split(sections, Vector(Vector.empty[S])).filter(!_.isEmpty && removeEmpty).map(new Doc(_))
+  }
+
   def toMetadata(implicit ev: S <:< Complex[Section]) = new Metadata(sections.map(ev))
 }
-
 
 object Metadata {
   val Empty = new Metadata(Vector.empty)
