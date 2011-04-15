@@ -132,21 +132,21 @@ object Validators {
 
     def text: StrictSectionValidator = new StrictSectionValidator {
       def validate(section: Section) = section match {
-        case Complex(_, _) => fail("Expected primitive text section; got " + section)
+        case Complex(_, _) | Separator => fail("Expected primitive text section; got " + section)
         case Primitive(_) => section.success
       }
     }
 
     def text(s: String): StrictSectionValidator = new StrictSectionValidator {
       def validate(section: Section) = section match {
-        case Complex(_, _) => fail("Expected primitive text section with value \"" + s + "\"; got " + section)
+        case Complex(_, _) | Separator => fail("Expected primitive text section with value \"" + s + "\"; got " + section)
         case Primitive(v) => if (v == s) section.success else fail("Expected primitive text section with value \"" + s + "\"; got " + v)
       }
     }
 
     def text(p: String => Boolean): StrictSectionValidator = new StrictSectionValidator {
       override def validate(section: Section) = section match {
-        case Complex(_, _) => fail("Expected primitive text section; got " + section)
+        case Complex(_, _) | Separator => fail("Expected primitive text section; got " + section)
         case Primitive(s) => if (p(s)) section.success else fail("Primitive section failed validation predicate.")
       }
     }

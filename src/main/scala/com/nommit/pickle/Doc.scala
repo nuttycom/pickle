@@ -4,6 +4,7 @@ import collection.{IndexedSeqLike, TraversableLike}
 import collection.immutable.{IndexedSeq, Vector}
 import collection.generic.{SeqFactory, CanBuildFrom, HasNewBuilder}
 import scalaz._
+import annotation.tailrec
 
 object Doc {
   def empty[S <: Section] = new Doc[S](Vector.empty)
@@ -58,6 +59,14 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
     (new Doc(left), new Doc(right))
   }
 
+  //def split: Vector[Doc[S]] = {
+  //  @tailrec def inSplit(lb: List[A], acc: Vector[Vector[B]]): Vector[Vector[B]] = lb match {
+  //    case x :: xs => inSplit(xs, f(x).map(v => acc.init :+ (acc.last :+ v)).getOrElse(acc :+ Vector.empty))
+  //    case Nil     => acc
+  //  }
+
+  //  inSplit(l, Vector.empty)
+  //}
   def toMetadata(implicit ev: S <:< Complex[Section]) = new Metadata(sections.map(ev))
 }
 

@@ -144,8 +144,8 @@ class ParserSpec extends Specification {
 
         @[a # @href[google.com]]
           @a[foo # @href[google.com]]
-          @label[#@ref[null]]
-          @a[foo # @href[@ref[null]]]
+          @label[#@ref[x]]
+          @a[foo # @href[@ref[x]]]
         @/
       """
 
@@ -159,9 +159,9 @@ class ParserSpec extends Specification {
             Tag("a", Metadata(Complex(Tag("href"), Doc.text("google.com")))),
             Doc(
               Complex(Tag("a", Metadata(Complex(Tag("href"), Doc.text("google.com")))), Doc.text("foo")),
-              Complex(Tag("label", Metadata(Complex(Tag("ref"), Doc.text("null")))), Doc.empty[Section]),
+              Complex(Tag("label", Metadata(Complex(Tag("ref"), Doc.text("x")))), Doc.empty[Section]),
               Complex(
-                Tag("a", Metadata(Complex(Tag("href"), Doc.tagged(Tag("ref"), Doc.text("null"))))),
+                Tag("a", Metadata(Complex(Tag("href"), Doc.tagged(Tag("ref"), Doc.text("x"))))),
                 Doc.text("foo")
               )
             )
@@ -174,6 +174,7 @@ class ParserSpec extends Specification {
       PickleParser.parse(sample) must matchPickleParse(
         Doc(
           Primitive("123 45th St."),
+          Separator,
           Primitive("678 90th St.")
         )
       )
@@ -185,7 +186,7 @@ class ParserSpec extends Specification {
         Doc(
           Complex(
             Tag("list"),
-            Doc(Primitive("123 45th St. @ |"), Primitive("678 90th St."))
+            Doc(Primitive("123 45th St. @ |"), Separator, Primitive("678 90th St."))
           )
         )
       )
@@ -196,6 +197,7 @@ class ParserSpec extends Specification {
       PickleParser.parse(sample) must matchPickleParse(
         Doc(
           Primitive("123 45th St."),
+          Separator,
           Primitive("678 90th St. "),
           Complex(
             Tag("a", Metadata(Complex(Tag("href"), Doc.text("google.com")))),
@@ -205,8 +207,8 @@ class ParserSpec extends Specification {
       )
     }
   }
-
 }
+
 
 // vim: set ts=4 sw=4 et:
 

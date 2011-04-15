@@ -2,16 +2,19 @@ package com.nommit.pickle
 
 import scala.util.parsing.combinator.RegexParsers
 import scala.util.parsing.combinator.PackratParsers
+import annotation.tailrec
 
 class PickleParser extends RegexParsers with PackratParsers {
+  import PickleParser.{unescape, fixWhitespace}
+
   def parse(s: String) = parseAll(doc, s)
 
   // Just about any string that doesn't include spaces, control characters
   // or would confuse the parser can be used as an identifier. Bring on your Unicode!
   val Ident = """([^@\[\]\s\p{Cntrl}]+)""".r
 
-  lazy val doc: PackratParser[Doc[Section]] = rep(tagged | text | "@@") ^^ {
-    values => Doc(fixWhitespace(values.collect { case s: Section => s }) : _*)
+  lazy val doc: PackratParser[Doc[Section]] = rep(tagged | text | (literal("@@").map(_ => Separator))) ^^ {
+    values => Doc(fixWhitespace(values): _*)
   }
 
   def text: Parser[Primitive] = """([^@\\]|\\@)+""".r ^^ (Primitive compose unescape)
@@ -41,31 +44,31 @@ class PickleParser extends RegexParsers with PackratParsers {
 
   def ntext: Parser[Primitive] = """([^|\[\]\\@#]|\\\||\\\[|\\\]|\\@|\\#|\\ )+""".r ^^ (Primitive compose unescape)
 
-  lazy val ndoc: PackratParser[Doc[Section]] = rep(tagged | ntext | "(@@|\\|)".r) ^^ {
+  lazy val ndoc: PackratParser[Doc[Section]] = rep(tagged | ntext | (regex("(@@|\\|)".r).map(_ => Separator))) ^^ {
     values => Doc(fixWhitespace(values) : _*)
-  }
-
-  private val unescape = (s: String) => s.replaceAll("""\\(?!\\)""", "")
-
-  private def fixWhitespace(values: List[AnyRef]): List[Section] = values.foldRight(List.empty[Section]) {
-    case (Primitive(s1), Primitive(s2) :: rest) =>
-      val s1s = s1.replaceAll("""(?<!\\)\s+$""", "")
-      val s2s = s2.replaceAll("""^\s+""", "")
-
-      if (s1s.isEmpty && s2s.isEmpty)          rest
-      else if (s1s.isEmpty)  Primitive(s2s) :: rest
-      else if (s2s.isEmpty)  Primitive(s1s) :: rest
-      else Primitive(s1s) :: Primitive(s2s) :: rest
-
-    case (Primitive(s), Nil) =>
-      // strip trailing unescaped spaces from the last element; if what remains is empty, drop the element
-      val ss = s.replaceAll("""(?<!\\)\s+$""", "")
-      if (ss.isEmpty) Nil else Primitive(ss) :: Nil
-
-    case (elem: Section, rest) => elem :: rest
-    case (_, rest) => rest
   }
 }
 
-object PickleParser extends PickleParser
+object PickleParser extends PickleParser {
+  val unescape = (s: String) => s.replaceAll("""\\(?!\\)""", "")
+
+  def fixWhitespace(values: List[Section]): List[Section] = {
+    def trimRight(s: String) = s.replaceAll("""(?<!\\)\s+$""", "")
+    def trimLeft(s: String)  = s.replaceAll("""^\s+""", "")
+    def primitives(l: String*): List[Primitive] = l.filter(!_.isEmpty).map(Primitive(_)).toList
+
+    val tail = values.foldRight(List.empty[Section]) {
+      case (p1 @ Primitive(s1), rest) => rest match {
+        case Separator :: Primitive(s2) :: xs => primitives(trimRight(s1)) ::: (Separator :: (primitives(trimLeft(s2)) ::: xs))
+        case Primitive(s2) :: xs              => primitives(trimRight(s1), trimLeft(s2)) ::: xs
+        case Nil                              => primitives(trimRight(s1))
+        case xs                               => p1 :: xs
+      }
+
+      case (s, rest) => s :: rest
+    }
+
+    tail.headOption.map({ case Primitive(s) => primitives(trimLeft(s)) ::: tail.tail; case x => x :: tail.tail }).getOrElse(Nil)
+  }
+}
 
