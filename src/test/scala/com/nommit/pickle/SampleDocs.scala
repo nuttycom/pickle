@@ -2,21 +2,22 @@ package com.nommit.pickle
 
 object SampleDocs {
   val pancakes = """
-    @units[cup # @type[volume] @*[cup]]
-    @units[tsp # @type[volume] @*[tsp]]
+    @*[@units[cup # @type[volume]] # @id[cup]]
+    @*[@units[tsp # @type[volume]] # @id[tsp]]
 
     @[ingredients]
-      @ingredient[@volume[1 # @^[cup]] Whole wheat flour # @*[flour]]
-      @ingredient[@volume[1 1/2 # @^[tsp]] Baking Powder # @*[baking powder]]
-      @ingredient[@volume[1/2 # @^[tsp]] Salt # @*[salt]]
-      @ingredient[@quantity[2] Eggs # @*[egg]]
-      @ingredient[@volume[1 # @^[cup]] Milk # @*[milk]]
-      @ingredient[@volume[1/4 # @^[cup]] Oil # @*[oil]]
+      @*[@volume[1 # @^[cup]]     Whole wheat flour # @id[flour]]
+      @*[@volume[1 1/2 # @^[tsp]] Baking Powder     # @id[baking powder]]
+      @*[@volume[1/2 # @^[tsp]]   Salt              # @id[salt]]
+      @*[@quantity[2]             Eggs              # @id[egg]]
+      @*[@volume[1 # @^[cup]]     Milk              # @id[milk]]
+      @*[@volume[1/4 # @^[cup]]   Oil               # @id[oil]]
     @/
+
     @[steps]
-      Mix together @^[flour], @^[baking powder] and @^[salt] in a bowl. @@
-      Separate the @^[egg], reserving the @part[whites # @^[egg]].      @@
-      Combine @part[yolks # @^[egg]] with the @^[milk] and @^[oil].
+      Mix together @^[ingredients > flour], @^[ingredients > baking powder] and @^[ingredients > salt] in a bowl. @@
+      Separate the @^[ingredients > egg], reserving the @part[whites # @^[ingredients > egg]].      @@
+      Combine @part[yolks # @^[ingredients > egg]] with the @^[ingredients > milk] and @^[ingredients > oil].
     @/
   """
 
@@ -29,12 +30,6 @@ object SampleDocs {
       @address[221 C Baker Street]
       #
       @collectionType[Set] @elementType[Employee]
-    ]
-  """
-
-  val foos = """
-    @foo[
-      @a[] @z[] | @b[] @z[] | @c[]@z[]
     ]
   """
 }

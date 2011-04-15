@@ -5,6 +5,7 @@ import collection.immutable.{IndexedSeq, Vector}
 import collection.generic.{SeqFactory, CanBuildFrom, HasNewBuilder}
 import scalaz._
 import annotation.tailrec
+import collection.mutable.Builder
 
 object Doc {
   def empty[S <: Section] = new Doc[S](Vector.empty)
@@ -36,11 +37,11 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
   override def apply(idx: Int) = sections(idx)
   override def length = sections.length
 
-  override def drop(n: Int) = new Doc(sections drop n)
-  override def dropRight(n: Int) = new Doc(sections dropRight n)
+  override def drop(n: Int) = new Doc[S](sections drop n)
+  override def dropRight(n: Int) = new Doc[S](sections dropRight n)
 
-  override def take(n: Int) = new Doc(sections take n)
-  override def takeRight(n: Int) = new Doc(sections takeRight n)
+  override def take(n: Int) = new Doc[S](sections take n)
+  override def takeRight(n: Int) = new Doc[S](sections takeRight n)
 
   override def head = sections.head
   override def tail = new Doc(sections.tail)
@@ -52,7 +53,7 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
   override def reverseIterator = sections.reverseIterator
 
   override def lengthCompare(len: Int) = sections lengthCompare len
-  override def slice(from: Int, until: Int) = new Doc(sections.slice(from, until))
+  override def slice(from: Int, until: Int) = new Doc[S](sections.slice(from, until))
 
   override def splitAt(n: Int) = {
     val (left, right) = sections splitAt n
@@ -87,3 +88,36 @@ class Metadata private[pickle](private[pickle] override val sections: Vector[Com
   override protected[this] def newBuilder = Metadata.newBuilder
   override def equals(other: Any) = other.isInstanceOf[Metadata] && super.equals(other)
 }
+
+trait Zipper[+S <: Section] extends Doc[S] { outer =>
+  protected def locations: Vector[(Int, Int, Doc[Section] => Section)]
+  protected def parent: Zipper[Section]
+
+  def trim: Doc[S] = new Doc(sections)
+
+  def unselect: Zipper[Section] = {
+    null
+  }
+
+  override def map[B, That](f: S => B)(implicit cbf: CanBuildFrom[Doc[S], B, That]) = cbf match {
+    case cbf: ZipperCBF[Doc[Section], B, That] => {
+      val builder = cbf.builder(parent, locations)
+      builder ++= (sections.map(f))
+      builder.result
+    }
+
+    case _ => super.map(f)(cbf)
+  }
+
+  override def updated[B >: A <: Section](index: Int, section: B) = {
+    new Doc[B](super.sections.updated(index, section)) with Zipper[B] {
+      override val locations = outer.locations
+      val parent = outer.parent
+    }
+  }
+}
+
+trait ZipperCBF[-From, -Elem, To] extends CanBuildFrom[From, Elem, To] {
+  def builder(from: From, v: Vector[(Int, Int, Doc[Section] => Section)]): Builder[Elem, To]
+}
+
