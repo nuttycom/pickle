@@ -71,6 +71,11 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
   }
 
   def toMetadata(implicit ev: S <:< Complex[Section]) = new Metadata(sections.map(ev))
+
+
+  def >[B, That](f: S => Option[B])(implicit cbf: CanBuildFrom[Doc[S], B, That]): That = {
+
+  }
 }
 
 object Metadata {
@@ -90,18 +95,18 @@ class Metadata private[pickle](private[pickle] override val sections: Vector[Com
 }
 
 trait Zipper[+S <: Section] extends Doc[S] { outer =>
-  protected def locations: Vector[(Int, Int, Doc[Section] => Section)]
+
+  /**
+   * Vector of edits to the parent that must be applied to traverse upward
+   */
+  protected def edits:  Vector[Edit]
   protected def parent: Zipper[Section]
 
   def trim: Doc[S] = new Doc(sections)
 
-  def unselect: Zipper[Section] = {
-    null
-  }
-
   override def map[B, That](f: S => B)(implicit cbf: CanBuildFrom[Doc[S], B, That]) = cbf match {
     case cbf: ZipperCBF[Doc[Section], B, That] => {
-      val builder = cbf.builder(parent, locations)
+      val builder = cbf.builder(parent, edits)
       builder ++= (sections.map(f))
       builder.result
     }
@@ -109,15 +114,15 @@ trait Zipper[+S <: Section] extends Doc[S] { outer =>
     case _ => super.map(f)(cbf)
   }
 
-  override def updated[B >: A <: Section](index: Int, section: B) = {
+  override def updated[B >: S <: Section](index: Int, section: B) = {
     new Doc[B](super.sections.updated(index, section)) with Zipper[B] {
-      override val locations = outer.locations
+      override val edits = outer.edits
       val parent = outer.parent
     }
   }
 }
 
 trait ZipperCBF[-From, -Elem, To] extends CanBuildFrom[From, Elem, To] {
-  def builder(from: From, v: Vector[(Int, Int, Doc[Section] => Section)]): Builder[Elem, To]
+  def builder(from: From, edits: Vector[Zipper[_]#Edit]): Builder[Elem, To]
 }
 
