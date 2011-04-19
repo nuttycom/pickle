@@ -59,4 +59,17 @@ class DocSpec extends Specification {
       )
     }
   }
+
+  "selecting parts of a document" should {
+    "successfully select a direct child" in {
+      PickleParser.parse(SampleDocs.pancakes) match {
+        case PickleParser.Success(pancakes, reader) if reader.atEnd =>
+          val ingredients = pancakes > 'ingredients
+          ingredients must haveSize(6)
+          ingredients must notExist(_ => )
+
+        case failure => fail("Unable to parse pancake recipe: " + failure)
+      }
+    }
+  }
 }
