@@ -13,47 +13,90 @@ object ~ {
   implicit def tuple[A, B](t: A ~ B): (A, B) = t.tuple
 }
 
-
-trait Extractors[+E] {
-  def error[X](msg: String): Validation[E, X]
-
-  trait DocExtractor[S <: Section, +A] extends Function1[Doc[S], Validation[E, A]] { outer =>
-    def ~[T >: S <: Section, B](s: DocExtractor[T, B]): DocExtractor[T, A ~ B] = new DocExtractor[T, A ~ B] {
-      override def apply(s1: Doc[S]) = (outer(s1) <**> s()
+trait Extractors[E] {
+  sealed trait Result[+A] {
+    def map[B](f: A => B): Result[B] = this match {
+      case Success(a, rest) => Success(f(a), rest)
+      case f : Failure => f
     }
-
-    def ~[T >: S <: Section, B](s: SectionExtractor[T, B]): DocExtractor[T, A ~ B] = error[A ~ B]("todo")
-
-    def map[B](f: A => B): DocExtractor[S, B] =
-    def flatMap[T >: S <: Section, B](f: A => DocExtractor[T, B]): DocExtractor[T, B] = error("todo")
   }
 
-  trait SectionExtractor[S <: Section, +A] extends Function1[S, Validation[E, A]] {
-    def ~[T >: S <: Section, B](e: DocExtractor[T, B]): DocExtractor[T, A ~ B] = error("todo")
-    def ~[T >: S <: Section, B](s: SectionExtractor[T, B]): DocExtractor[T, A ~ B] = error("todo")
+  case class Success[+A](value: A, rest: Doc[Section]) extends Result[A]
+  case class Failure(error: E, rest: Doc[Section]) extends Result[Nothing]
 
-    def map[B](f: A => B): SectionExtractor[S, B] = error("todo")
 
-    def flatMap[T >: S <: Section, B](f: A => SectionExtractor[T, B]): SectionExtractor[T, B] = error("todo")
+  def failure(msg: String, rest: Doc[Section]): Failure
+
+  trait DocExtractor[+A] extends Function1[Doc[Section], Result[A]] { outer =>
+    def ~[B](next: DocExtractor[B]): DocExtractor[A ~ B] = new DocExtractor[A ~ B] {
+      override def apply(doc: Doc[Section]): Result[A ~ B] = outer(doc) match {
+        case Success(a, rest) => next(rest).map(b => new ~(a, b))
+        case f : Failure => f
+      }
+    }
+
+    def ~[B](next: SectionExtractor[B]): DocExtractor[A ~ B] = new DocExtractor[A ~ B] {
+      override def apply(doc: Doc[Section]) = outer(doc) match {
+        case Success(a, rest) => rest.headOption.map(s => next(s)).getOrElse(failure("Document empty", Doc.empty)) match {
+          case Success(b, _) => Success(new ~(a, b), rest.tail)
+          case f : Failure => f
+        }
+
+        case f : Failure => f
+      }
+    }
+
+    def map[B](f: A => B): DocExtractor[B] = new DocExtractor[B] {
+      override def apply(doc: Doc[Section]) = outer(doc).map(f)
+    }
+
+    def flatMap[B](f: A => DocExtractor[B]): DocExtractor[B] = new DocExtractor[B] {
+      override def apply(doc: Doc[Section]) = outer(doc) match {
+        case Success(a, rest) => f(a)(rest)
+        case f : Failure => f
+      }
+    }
+  }
+
+  trait SectionExtractor[+A] extends Function1[Section, Result[A]] { outer =>
+    def ~[B](next: DocExtractor[B]): DocExtractor[A ~ B] = new DocExtractor[A ~ B] {
+      override def apply(doc: Doc[Section]): Result[A ~ B] = doc.headOption.map(s => outer(s)).getOrElse(failure("Document empty", Doc.empty)) match {
+        case Success(a, _) => next(doc.tail).map(b => new ~(a, b))
+        case f : Failure => f
+      }
+    }
+
+    def ~[B](next: SectionExtractor[B]): DocExtractor[A ~ B] = new DocExtractor[A ~ B] {
+      override def apply(doc: Doc[Section]) = doc.headOption.map(s => outer(s)).getOrElse(failure("Document empty", Doc.empty)) match {
+        case Success(a, _) => doc.tail.headOption.map(next).getOrElse(failure("Document empty", Doc.empty)) match {
+          case Success(b, _) => Success(new ~(a, b), doc.tail.tail)
+          case f : Failure => f
+        }
+
+        case f : Failure => f
+      }
+    }
+
+    def map[B](f: A => B): SectionExtractor[B] = new SectionExtractor[B] {
+      override def apply(s: Section) = outer(s).map(f)
+    }
   }
 
   sealed trait SemanticsHandler[-T, M, +A] extends Function2[T, M, Validation[E, A]]{
-    def metadataExtractor: DocExtractor[Complex[Section], M] = error("todo")
+    def metadataExtractor: DocExtractor[M]
   }
 
-  trait TagHandler[M, +A] extends SemanticsHandler[String, M, A] { self =>
-    def extractor[B](d: DocExtractor[Section, B]) = new SectionExtractor[Complex[Section], A ~ B] {
-      override def apply(section: Complex[Section]) = section.tag match {
-        case Tag(ident, metadata) =>
-          (self.metadataExtractor(metadata).flatMap(self(ident, _)) <**> d(section.doc))(_ ~ _)
-
-        case metatag => 
-          error("Expected a tag, but got " + metatag)
+  trait TagHandler[M, +A] extends SemanticsHandler[String, M, A] { outer =>
+    def extractor[B](d: DocExtractor[B]) = new SectionExtractor[A ~ B] {
+      override def apply(section: Section) = section match {
+        case Complex(Tag(ident, metadata), doc) => failure("todo", Doc.empty)
+        case Complex(MetaTag(_, _), doc) => failure("Found a metatag instead of a tag", doc)
+        case _ => failure("Not a tag", Doc.empty)
       }
     }
   }
 
   trait MetaTagHandler[T, M, +A] extends SemanticsHandler[T, M, A] {
-    def metaTagExtractor: DocExtractor[Section, T]
+    def metaTagExtractor: DocExtractor[T]
   }
 }

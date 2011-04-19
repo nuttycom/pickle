@@ -1,11 +1,12 @@
 package com.nommit.pickle
 
 import collection.{IndexedSeqLike, TraversableLike}
-import collection.immutable.{IndexedSeq, Vector}
 import collection.generic.{SeqFactory, CanBuildFrom, HasNewBuilder}
 import scalaz._
 import annotation.tailrec
-import collection.mutable.Builder
+import util.BloomFilter
+import collection.immutable.{VectorBuilder, IndexedSeq, Vector}
+import collection.mutable.{ArrayBuffer, Builder}
 
 object Doc {
   def empty[S <: Section] = new Doc[S](Vector.empty)
@@ -71,6 +72,87 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
   }
 
   def toMetadata(implicit ev: S <:< Complex[Section]) = new Metadata(sections.map(ev))
+
+  private val bloomFilter: util.BloomFilter = sections.foldLeft(BloomFilter.empty) {
+    case (bf, Complex(Tag(ident, metadata), doc)) => bf.append(doc.bloomFilter, ident) ++ metadata.bloomFilter
+    case (bf, Complex(MetaTag(ident, metadata), doc)) => bf ++ ident.bloomFilter ++ metadata.bloomFilter ++ doc.bloomFilter
+  }
+
+  def matches(s: Selector[_, _]) = s.characteristic.forall(bloomFilter.contains)
+
+  def >[B, That <: Traversable[B]](selector: Selector[B, That])(implicit cbf: ZipperCBF[Zipper[S], B, That]): That = {
+    import Zipper._
+    if (matches(selector)) {
+      val selected = new VectorBuilder[B]
+      val chunks = new VectorBuilder[Int]
+      val editors = new VectorBuilder[Doc[Section] => Section]
+
+      sections.foreach {
+        case complex @ Complex(_, grandchildren) if grandchildren.matches(selector) => {
+          val selectedChildOffsets = new ArrayBuffer[Int](grandchildren.length)
+          var selectedCount = 0
+
+          var grandchildIndex = 0
+          for (grandchild <- grandchildren) {
+            if (selector isDefinedAt grandchild) {
+              selected += selector(grandchild)
+              selectedCount += 1
+              selectedChildOffsets += grandchildIndex
+            }
+            grandchildIndex += 1
+          }
+
+          chunks   += selectedCount
+          editors += (
+            (replacements: Doc[Section]) => complex.copy(
+              doc = Doc(
+                (selectedChildOffsets zip replacements).foldLeft(grandchildren.sections) {
+                  case (vec, (i, r)) => vec.updated(i, r)
+                }: _*
+              )
+            )
+          )
+        }
+
+        case _ =>
+      }
+
+      lazy val (_, edits) = {
+        (chunks.result zip editors.result).foldLeft((0, Vector[Edit]())) {
+          case ((i, acc), (length, f)) if length != 0 => (i + length, acc :+ Edit(i, i + length, f))
+          case ((i, acc), _)                          => (i, acc)
+        }
+      }
+
+      val builder = cbf.builder(zipper, edits)
+      builder ++= selected.result
+      builder.result
+    } else {
+      cbf.builder(Vector.empty).result
+    }
+  }
+
+  protected def zipper: Zipper[S] = new Doc(sections) with Zipper[S] {
+    override val edits = Vector()
+    override def parent = error("Attempted to move up at root of the tree")
+  }
+}
+
+trait Selector[+A, +Coll <: Traversable[A]] extends PartialFunction[Section, A] {
+  def characteristic: Option[String]
+}
+
+object Selector {
+  implicit def sym(s: Symbol): Selector[Section, Zipper[Section]] = str(s.name)
+  implicit def str(ident: String): Selector[Section, Zipper[Section]] = new Selector[Section, Zipper[Section]] {
+    val tagMatch: PartialFunction[Section, Section] = {
+      case c @ Complex(Tag(`ident`, _), _) => c
+    }
+
+    override def characteristic = Some(ident)
+    override def apply(s: Section) = tagMatch(s)
+    override def isDefinedAt(s: Section) = tagMatch.isDefinedAt(s)
+  }
 }
 
 object Metadata {
@@ -89,8 +171,12 @@ class Metadata private[pickle](private[pickle] override val sections: Vector[Com
   override def equals(other: Any) = other.isInstanceOf[Metadata] && super.equals(other)
 }
 
+object Zipper {
+  case class Edit(from: Int, to: Int, rebuild: Doc[Section] => Section)
+}
+
 trait Zipper[+S <: Section] extends Doc[S] { outer =>
-  case class Edit(from: Int, to: Int, f: Doc[Section] => Section)
+  import Zipper._
 
   /**
    * Vector of edits to the parent that must be applied to traverse upward
@@ -100,7 +186,18 @@ trait Zipper[+S <: Section] extends Doc[S] { outer =>
 
   def trim: Doc[S] = new Doc(sections)
 
-  def up: Zipper[S]
+  def up: Zipper[S] = {
+    // fold each edit into its location in the parent sections. 
+    val (_, sections) = edits.foldLeft((0, parent.sections)) {
+      case ((i, replacements), Edit(from, to, rebuild)) =>
+        (i + 1, if (replacements(i).isInstanceOf[Section]) replacements.updated(i, rebuild(outer.slice(from, to))) else replacements)
+    }
+
+    new Doc(sections) with Zipper[S] {
+      override val edits  = outer.parent.edits
+      override val parent = outer.parent.parent
+    }
+  }
 
   override def map[B, That](f: S => B)(implicit cbf: CanBuildFrom[Doc[S], B, That]) = cbf match {
     case cbf: ZipperCBF[Doc[Section], B, That] => {
@@ -113,14 +210,15 @@ trait Zipper[+S <: Section] extends Doc[S] { outer =>
   }
 
   override def updated[B >: S <: Section](index: Int, section: B) = {
-    new Doc[B](super.sections.updated(index, section)) with Zipper[B] {
+    new Doc[B](sections.updated(index, section)) with Zipper[B] {
       override val edits = outer.edits
-      val parent = outer.parent
+      override val parent = outer.parent
     }
   }
 }
 
 trait ZipperCBF[-From, -Elem, To] extends CanBuildFrom[From, Elem, To] {
-  def builder(from: From, edits: Vector[Zipper[_]#Edit]): Builder[Elem, To]
+  def builder(from: From, edits: => Vector[Zipper.Edit]): Builder[Elem, To]
+  def builder(edits: => Vector[Zipper.Edit]): Builder[Elem, To]
 }
 

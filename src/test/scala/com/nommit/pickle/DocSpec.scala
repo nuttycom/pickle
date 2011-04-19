@@ -66,7 +66,7 @@ class DocSpec extends Specification {
         case PickleParser.Success(pancakes, reader) if reader.atEnd =>
           val ingredients = pancakes > 'ingredients
           ingredients must haveSize(6)
-          ingredients must notExist(_ => )
+          ingredients must notExist(_.isInstanceOf[Primitive])
 
         case failure => fail("Unable to parse pancake recipe: " + failure)
       }
