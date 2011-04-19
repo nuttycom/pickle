@@ -21,9 +21,24 @@ object Doc {
 
   def newBuilder[S <: Section] = Vector.newBuilder[S].mapResult(new Doc(_))
 
-  implicit def canBuildFrom[S <: Section]: CanBuildFrom[Traversable[S], S, Doc[S]] = new CanBuildFrom[Traversable[S], S, Doc[S]] {
-    override def apply() = newBuilder
-    override def apply(from: Traversable[S]) = newBuilder ++= from
+  implicit def zipperCBF[S <: Section]: ZipperCBF[Traversable[_], S, Zipper[S]] = new ZipperCBF[Traversable[_], S, Zipper[S]] {
+    override def builder(from: Traversable[_], priorEdits: => Vector[Zipper.Edit]): Builder[S, Zipper[S]] = Vector.newBuilder[S].mapResult {
+      sections => new Doc(sections) with Zipper[S] {
+        lazy val edits = priorEdits
+
+        lazy val parent = from match {
+          case doc: Doc[Section] => doc.zipper
+          case _ => error("No zipper context available")
+        }
+      }
+    }
+
+    override def builder(priorEdits: => Vector[Zipper.Edit]): Builder[S, Zipper[S]] =  Vector.newBuilder[S].mapResult {
+      sections => new Doc(sections) with Zipper[S] {
+        lazy val edits = priorEdits
+        def parent = error("No zipper context available")
+      }
+    }
   }
 }
 
@@ -73,9 +88,10 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
 
   def toMetadata(implicit ev: S <:< Complex[Section]) = new Metadata(sections.map(ev))
 
-  private val bloomFilter: util.BloomFilter = sections.foldLeft(BloomFilter.empty) {
+  private lazy val bloomFilter: BloomFilter = sections.foldLeft(BloomFilter.empty) {
     case (bf, Complex(Tag(ident, metadata), doc)) => bf.append(doc.bloomFilter, ident) ++ metadata.bloomFilter
     case (bf, Complex(MetaTag(ident, metadata), doc)) => bf ++ ident.bloomFilter ++ metadata.bloomFilter ++ doc.bloomFilter
+    case (bf, _) => bf
   }
 
   def matches(s: Selector[_, _]) = s.characteristic.forall(bloomFilter.contains)
@@ -219,6 +235,15 @@ trait Zipper[+S <: Section] extends Doc[S] { outer =>
 
 trait ZipperCBF[-From, -Elem, To] extends CanBuildFrom[From, Elem, To] {
   def builder(from: From, edits: => Vector[Zipper.Edit]): Builder[Elem, To]
+  override def apply(from: From): Builder[Elem, To] = builder(from, Vector.empty[Zipper.Edit])
+
   def builder(edits: => Vector[Zipper.Edit]): Builder[Elem, To]
+  override def apply(): Builder[Elem, To] = builder(Vector.empty[Zipper.Edit])
 }
 
+object ZipperCBF {
+  implicit def identity[From, Elem, To](implicit cbf: CanBuildFrom[From, Elem, To]): ZipperCBF[From, Elem, To] = new ZipperCBF[From, Elem, To] {
+    override def builder(from: From, edits: => Vector[Zipper.Edit]) = cbf(from)
+    override def builder(edits: => Vector[Zipper.Edit]) = cbf()
+  }
+}

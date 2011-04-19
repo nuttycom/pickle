@@ -52,7 +52,6 @@ class DocSpec extends Specification {
 
     "split correctly with trailing separators" in {
       val result = Doc(Primitive("a"), Primitive("b"), Separator, Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c"), Separator).split(true)
-      println(result)
       result must_== Vector(
         Doc(Primitive("a"), Primitive("b")),
         Doc(Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c"))

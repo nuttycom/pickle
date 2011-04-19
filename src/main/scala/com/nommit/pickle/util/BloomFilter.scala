@@ -52,13 +52,20 @@ private[pickle] class BloomFilter(private val bits: BitSet, private val n: Int, 
 
   def +(element: Any): BloomFilter = new BloomFilter(this.bits | BitSet(hash(m, k)(element): _*), n, m, k)
 
+  private def ensureCompatibility(that: BloomFilter) {
+    require(
+      this.n == that.n && this.m == that.m && this.k == that.k,
+      "BloomFilter properties must match: got n:" + (n, that.n) + "; m:" + (m, that.m) + "; k:" + (k, that.k)
+    )
+  }
+
   def ++(that: BloomFilter): BloomFilter = {
-    require(this.n != that.n || this.m != that.m || this.k != that.k, "BloomFilter properties must match")
+    ensureCompatibility(that)
     new BloomFilter(this.bits | that.bits, n, m, k)
   }
 
   def append(that: BloomFilter, elements: Any*): BloomFilter = {
-    require(this.n != that.n || this.m != that.m || this.k != that.k, "BloomFilter properties must match")
+    ensureCompatibility(that)
     new BloomFilter(this.bits | that.bits | hashes(m, k, elements), n, m, k)
   }
 
