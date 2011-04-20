@@ -96,62 +96,66 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
 
   def matches(s: Selector[_, _]) = s.characteristic.forall(bloomFilter.contains)
 
+	private def
+
+	def |[B, That <: Traversable[B]](selector: Selector[B, That])(implicit cbf: ZipperCBF[Zipper[S], B, That]): That = {
+	}
+
   def >[B, That <: Traversable[B]](selector: Selector[B, That])(implicit cbf: ZipperCBF[Zipper[S], B, That]): That = {
     import Zipper._
-    if (matches(selector)) {
-      val selected = new VectorBuilder[B]
-      val chunks = new VectorBuilder[Int]
-      val editors = new VectorBuilder[Doc[Section] => Section]
+		val selected = new VectorBuilder[B]
+		val chunks   = new VectorBuilder[Int]
+		val editors  = new VectorBuilder[Doc[Section] => Section]
 
-      sections.foreach {
-        case complex @ Complex(_, grandchildren) if grandchildren.matches(selector) => {
-          val selectedChildOffsets = new ArrayBuffer[Int](grandchildren.length)
-          var selectedCount = 0
+		sections.foreach {
+			case section @ Complex(_, child) => {
+				val selectedChildOffsets = new ArrayBuffer[Int](child.length)
+				var selectedCount = 0
 
-          var grandchildIndex = 0
-          for (grandchild <- grandchildren) {
-            if (selector isDefinedAt grandchild) {
-              selected += selector(grandchild)
-              selectedCount += 1
-              selectedChildOffsets += grandchildIndex
-            }
-            grandchildIndex += 1
-          }
+				var childIndex = 0
+				for (section <- child) {
+					if (selector isDefinedAt section) {
+						selected += selector(section)
+						selectedCount += 1
+						selectedChildOffsets += childIndex
+					}
+					childIndex += 1
+				}
 
-          chunks   += selectedCount
-          editors += (
-            (replacements: Doc[Section]) => complex.copy(
-              doc = Doc(
-                (selectedChildOffsets zip replacements).foldLeft(grandchildren.sections) {
-                  case (vec, (i, r)) => vec.updated(i, r)
-                }: _*
-              )
-            )
-          )
-        }
+				chunks   += selectedCount
+				editors += (
+					(replacements: Doc[Section]) => complex.copy(
+						doc = Doc(
+							(selectedChildOffsets zip replacements).foldLeft(child.sections) {
+								case (vec, (i, r)) => vec.updated(i, r)
+							}: _*
+						)
+					)
+				)
+			}
 
-        case _ =>
-      }
+			case _ =>
+		}
 
-      lazy val (_, edits) = {
-        (chunks.result zip editors.result).foldLeft((0, Vector[Edit]())) {
-          case ((i, acc), (length, f)) if length != 0 => (i + length, acc :+ Edit(i, i + length, f))
-          case ((i, acc), _)                          => (i, acc)
-        }
-      }
+		lazy val (_, edits) = {
+			(chunks.result zip editors.result).foldLeft((0, Vector[Edit]())) {
+				case ((i, acc), (length, f)) if length != 0 => (i + length, acc :+ Edit(i, i + length, f))
+				case ((i, acc), _)                          => (i, acc)
+			}
+		}
 
-      val builder = cbf.builder(zipper, edits)
-      builder ++= selected.result
-      builder.result
-    } else {
-      cbf.builder(Vector.empty).result
-    }
+		val builder = cbf.builder(zipper, edits)
+		builder ++= selected.result
+		builder.result
   }
 
-  protected def zipper: Zipper[S] = new Doc(sections) with Zipper[S] {
-    override val edits = Vector()
-    override def parent = error("Attempted to move up at root of the tree")
-  }
+  protected def zipper: Zipper[S] = this match {
+		case z: Zipper[S] => z
+		case _ => new Doc(sections) with Zipper[S] {
+			override val edits = Vector()
+			override def parent = error("Attempted to move up at root of the tree")
+		}
+	}
 }
 
 trait Selector[+A, +Coll <: Traversable[A]] extends PartialFunction[Section, A] {
@@ -160,6 +164,7 @@ trait Selector[+A, +Coll <: Traversable[A]] extends PartialFunction[Section, A] 
 
 object Selector {
   implicit def sym(s: Symbol): Selector[Section, Zipper[Section]] = str(s.name)
+
   implicit def str(ident: String): Selector[Section, Zipper[Section]] = new Selector[Section, Zipper[Section]] {
     val tagMatch: PartialFunction[Section, Section] = {
       case c @ Complex(Tag(`ident`, _), _) => c
