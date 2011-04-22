@@ -8,7 +8,7 @@ private[pickle] object BloomFilter {
   
   private val ProbableDefaultMAndK = (2363, 2)
 
-  val empty = apply(Nil)()
+  val Empty = apply(Nil)()
 
   def apply(elements: Seq[Any] = Nil)(n: Int = (elements.size + 1) * 2, p: Float = 0.33f): BloomFilter = {
     require(elements != null, "elements must not be null!")

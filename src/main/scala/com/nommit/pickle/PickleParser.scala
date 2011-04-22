@@ -9,6 +9,11 @@ class PickleParser extends RegexParsers with PackratParsers {
 
   def parse(s: String) = parseAll(doc, s)
 
+  def unsafeParse(s: String) = parse(s) match {
+    case Success(doc, rest) if rest.atEnd => doc
+    case error => Predef.error("Shouldn't have used unsafeParse: " + error)
+  }
+
   // Just about any string that doesn't include spaces, control characters
   // or would confuse the parser can be used as an identifier. Bring on your Unicode!
   val Ident = """([^@\[\]\s\p{Cntrl}]+)""".r

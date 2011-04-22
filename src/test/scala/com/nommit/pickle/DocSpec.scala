@@ -23,6 +23,11 @@ class DocSpec extends Specification {
         doc.toMetadata must_== Metadata(Complex(Tag("a"), Doc.empty[Complex[Primitive]]))
       }
     }
+
+    "pretty print correctly" in {
+      val pancakes = PickleParser.unsafeParse(SampleDocs.pancakes)
+      println(pancakes.prettyPrint())
+    }
   }
 
   "a metadata document" should {
@@ -60,15 +65,18 @@ class DocSpec extends Specification {
   }
 
   "selecting parts of a document" should {
-    "successfully select a direct child" in {
-      PickleParser.parse(SampleDocs.pancakes) match {
-        case PickleParser.Success(pancakes, reader) if reader.atEnd =>
-          val ingredients = pancakes > 'ingredients
-          ingredients must haveSize(6)
-          ingredients must notExist(_.isInstanceOf[Primitive])
+    val pancakes = PickleParser.unsafeParse(SampleDocs.pancakes)
+    "successfully select a member" in {
+      val ingredients = pancakes | 'ingredients
+      ingredients must haveSize(1)
+      ingredients must notExist(_.isInstanceOf[Primitive])
+    }
 
-        case failure => fail("Unable to parse pancake recipe: " + failure)
-      }
+    "successfully edit a member" in {
+      val refs = (pancakes | 'ingredients) > '*
+      refs must haveSize(6)
+
+      println(refs.flatMap{ case Complex(_, doc) => doc }.up)
     }
   }
 }

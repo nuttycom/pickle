@@ -88,65 +88,72 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
 
   def toMetadata(implicit ev: S <:< Complex[Section]) = new Metadata(sections.map(ev))
 
-  private lazy val bloomFilter: BloomFilter = sections.foldLeft(BloomFilter.empty) {
-    case (bf, Complex(Tag(ident, metadata), doc)) => bf.append(doc.bloomFilter, ident) ++ metadata.bloomFilter
-    case (bf, Complex(MetaTag(ident, metadata), doc)) => bf ++ ident.bloomFilter ++ metadata.bloomFilter ++ doc.bloomFilter
-    case (bf, _) => bf
+  private[pickle] lazy val bloomFilters: Vector[BloomFilter] = sections.foldLeft(Vector.empty[BloomFilter]) {
+    (filters, section) => filters.zipAll(section.bloomFilters, BloomFilter.Empty, BloomFilter.Empty).map {
+      case (f1, f2) => f1 ++ f2
+    }
   }
 
-  def matches(s: Selector[_, _]) = s.characteristic.forall(bloomFilter.contains)
-
-	private def
+  def matches(s: Selector[_, _]) = (s.characteristics zip bloomFilters).forall {
+    case (v, filter) => filter.contains(v)
+  }
 
 	def |[B, That <: Traversable[B]](selector: Selector[B, That])(implicit cbf: ZipperCBF[Zipper[S], B, That]): That = {
-	}
+    val builder = cbf.builder(zipper, Vector.empty)
+    builder ++= this.filter(selector.isDefinedAt).map(selector)
+    builder.result
+  }
 
   def >[B, That <: Traversable[B]](selector: Selector[B, That])(implicit cbf: ZipperCBF[Zipper[S], B, That]): That = {
     import Zipper._
-		val selected = new VectorBuilder[B]
-		val chunks   = new VectorBuilder[Int]
-		val editors  = new VectorBuilder[Doc[Section] => Section]
+    if (matches(selector)) {
+      val selected = new VectorBuilder[B]
+      val chunks   = new VectorBuilder[Int]
+      val editors  = new VectorBuilder[Doc[Section] => Section]
 
-		sections.foreach {
-			case section @ Complex(_, child) => {
-				val selectedChildOffsets = new ArrayBuffer[Int](child.length)
-				var selectedCount = 0
+      sections.foreach {
+        case complex @ Complex(_, child) => {
+          val selectedChildOffsets = new ArrayBuffer[Int](child.length)
+          var selectedCount = 0
 
-				var childIndex = 0
-				for (section <- child) {
-					if (selector isDefinedAt section) {
-						selected += selector(section)
-						selectedCount += 1
-						selectedChildOffsets += childIndex
-					}
-					childIndex += 1
-				}
+          var childIndex = 0
+          for (section <- child) {
+            if (selector isDefinedAt section) {
+              selected += selector(section)
+              selectedCount += 1
+              selectedChildOffsets += childIndex
+            }
+            childIndex += 1
+          }
 
-				chunks   += selectedCount
-				editors += (
-					(replacements: Doc[Section]) => complex.copy(
-						doc = Doc(
-							(selectedChildOffsets zip replacements).foldLeft(child.sections) {
-								case (vec, (i, r)) => vec.updated(i, r)
-							}: _*
-						)
-					)
-				)
-			}
+          chunks   += selectedCount
+          editors += (
+            (replacements: Doc[Section]) => complex.copy(
+              doc = Doc(
+                (selectedChildOffsets zip replacements).foldLeft(child.sections) {
+                  case (vec, (i, r)) => vec.updated(i, r)
+                }: _*
+              )
+            )
+          )
+        }
 
-			case _ =>
-		}
+        case _ =>
+      }
 
-		lazy val (_, edits) = {
-			(chunks.result zip editors.result).foldLeft((0, Vector[Edit]())) {
-				case ((i, acc), (length, f)) if length != 0 => (i + length, acc :+ Edit(i, i + length, f))
-				case ((i, acc), _)                          => (i, acc)
-			}
-		}
+      lazy val (_, edits) = {
+        (chunks.result zip editors.result).foldLeft((0, Vector[Edit]())) {
+          case ((i, acc), (length, f)) if length != 0 => (i + length, acc :+ Edit(i, i + length, f))
+          case ((i, acc), _)                          => (i, acc)
+        }
+      }
 
-		val builder = cbf.builder(zipper, edits)
-		builder ++= selected.result
-		builder.result
+      val builder = cbf.builder(zipper, edits)
+      builder ++= selected.result
+      builder.result
+    } else {
+      cbf.builder(Vector.empty).result
+    }
   }
 
   protected def zipper: Zipper[S] = this match {
@@ -156,10 +163,48 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
 			override def parent = error("Attempted to move up at root of the tree")
 		}
 	}
+
+  def complexity: Int = sections.map(_.complexity).sum
+  def inline = complexity <= 10
+
+  def prettyPrint(depth: Int = 0): String = {
+    val prefix = " " * (depth * 2)
+    def line(s: String) = if (inline) s else prefix + s
+    def mdoc(m: Metadata) = if (m.isEmpty) "" else " # " + m.prettyPrint(depth + 1)
+
+    val subdocs = split(true).map{
+      subdoc => (
+        subdoc.inline,
+        subdoc.sections.map {
+          case Primitive(s) => line(s)
+          case s: Separator.type => line(if (inline) "|" else "@@")
+          case complex @ Complex(Tag(ident, metadata), doc) =>
+            if (complex.complexity <= 10) {
+              line("@" + ident + "[" + doc.prettyPrint(depth + 1) + mdoc(metadata) + "]")
+            } else {
+              line("@[" + ident + mdoc(metadata) + "]\n" + doc.prettyPrint(depth + 1) + "\n@/")
+            }
+        }
+      )
+    }
+
+    subdocs.map{ case (inline, d) => d.mkString(if (inline) "" else "\n")}.mkString(if (inline) "" else "\n")
+  }
 }
 
-trait Selector[+A, +Coll <: Traversable[A]] extends PartialFunction[Section, A] {
-  def characteristic: Option[String]
+trait Selector[+A, +Coll <: Traversable[A]] extends PartialFunction[Section, A] { outer =>
+  def characteristics: Vector[String]
+
+  def |#(s: Selector[_, _]): Selector[A, Coll] = new Selector[A, Coll] {
+    override def characteristics = outer.characteristics ++ s.characteristics
+
+    override def apply(section: Section) = outer(section)
+
+    override def isDefinedAt(section: Section) = outer.isDefinedAt(section) && (section match {
+      case Complex(tag, doc) => tag.metadata.exists(s.isDefinedAt)
+      case _ => false
+    })
+  }
 }
 
 object Selector {
@@ -170,7 +215,7 @@ object Selector {
       case c @ Complex(Tag(`ident`, _), _) => c
     }
 
-    override def characteristic = Some(ident)
+    override def characteristics = Vector(ident)
     override def apply(s: Section) = tagMatch(s)
     override def isDefinedAt(s: Section) = tagMatch.isDefinedAt(s)
   }
@@ -210,8 +255,10 @@ trait Zipper[+S <: Section] extends Doc[S] { outer =>
   def up: Zipper[S] = {
     // fold each edit into its location in the parent sections. 
     val (_, sections) = edits.foldLeft((0, parent.sections)) {
-      case ((i, replacements), Edit(from, to, rebuild)) =>
-        (i + 1, if (replacements(i).isInstanceOf[Section]) replacements.updated(i, rebuild(outer.slice(from, to))) else replacements)
+      case ((i, replacements), Edit(from, to, rebuild)) => (
+        i + 1,
+        if (replacements(i).isInstanceOf[Complex[Section]]) replacements.updated(i, rebuild(outer.slice(from, to))) else replacements
+      )
     }
 
     new Doc(sections) with Zipper[S] {
