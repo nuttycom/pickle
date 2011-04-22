@@ -24,10 +24,10 @@ class DocSpec extends Specification {
       }
     }
 
-    "pretty print correctly" in {
-      val pancakes = PickleParser.unsafeParse(SampleDocs.pancakes)
-      println(pancakes.prettyPrint())
-    }
+    //"pretty print correctly" in {
+    //  val pancakes = PickleParser.unsafeParse(SampleDocs.pancakes)
+    //
+    //}
   }
 
   "a metadata document" should {
@@ -73,10 +73,14 @@ class DocSpec extends Specification {
     }
 
     "successfully edit a member" in {
-      val refs = (pancakes | 'ingredients) > '*
-      refs must haveSize(6)
+      import util.MMA._
+      import scalaz.Scalaz._
+      val doc = PickleParser.unsafeParse("@a[@b[c] @b[c] @b[c] d] d")
+      val refs = (doc | 'a) > 'b
+      refs must haveSize(3)
 
-      println(refs.flatMap{ case Complex(_, doc) => doc }.up)
+      val dereferenced = refs.map{ case Complex(Tag("b", metadata), doc) => doc }.intersperse(Separator)
+      dereferenced must be equalTo(Doc(Complex(Tag("a"), Doc.text("c", "c", "c", "d")), Primitive("d")))
     }
   }
 }

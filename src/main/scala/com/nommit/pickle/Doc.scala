@@ -1,17 +1,20 @@
 package com.nommit.pickle
 
+import util.BloomFilter
+
 import collection.{IndexedSeqLike, TraversableLike}
 import collection.generic.{SeqFactory, CanBuildFrom, HasNewBuilder}
 import scalaz._
+import Scalaz._
 import annotation.tailrec
-import util.BloomFilter
 import collection.immutable.{VectorBuilder, IndexedSeq, Vector}
 import collection.mutable.{ArrayBuffer, Builder}
+
 
 object Doc {
   def empty[S <: Section] = new Doc[S](Vector.empty)
 
-  def text(s: String): Doc[Primitive] = new Doc(Vector(Primitive(s)))
+  def text(s: String*): Doc[Primitive] = new Doc(Vector(s.map(Primitive(_)): _*))
 
   def tagged[S <: Section](s: Semantics, d: Doc[S]): Doc[Complex[S]] = new Doc(Vector(Complex(s, d)))
 
@@ -39,6 +42,16 @@ object Doc {
         def parent = error("No zipper context available")
       }
     }
+  }
+
+  implicit def DocMonoid[S <: Section]: Monoid[Doc[S]] = new Monoid[Doc[S]] {
+    val zero: Doc[S] = Doc.empty[S]
+    def append(s1: Doc[S], s2: => Doc[S]): Doc[S] = s1 ++ s2
+  }
+
+  implicit def DocReducer[S <: Section]: Reducer[S, Doc[S]] = new Reducer[S, Doc[S]] {
+    override def cons(s: S, d: Doc[S]) = s +: d
+    override def unit(s: S) = Doc(s)
   }
 }
 
@@ -156,7 +169,7 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
     }
   }
 
-  protected def zipper: Zipper[S] = this match {
+  def zipper: Zipper[S] = this match {
 		case z: Zipper[S] => z
 		case _ => new Doc(sections) with Zipper[S] {
 			override val edits = Vector()
@@ -169,23 +182,24 @@ class Doc[+S <: Section] private[pickle] (private[pickle] val sections: Vector[S
 
   def prettyPrint(depth: Int = 0): String = {
     val prefix = " " * (depth * 2)
-    def line(s: String) = if (inline) s else prefix + s
     def mdoc(m: Metadata) = if (m.isEmpty) "" else " # " + m.prettyPrint(depth + 1)
 
     val subdocs = split(true).map{
-      subdoc => (
-        subdoc.inline,
-        subdoc.sections.map {
-          case Primitive(s) => line(s)
-          case s: Separator.type => line(if (inline) "|" else "@@")
-          case complex @ Complex(Tag(ident, metadata), doc) =>
-            if (complex.complexity <= 10) {
-              line("@" + ident + "[" + doc.prettyPrint(depth + 1) + mdoc(metadata) + "]")
-            } else {
-              line("@[" + ident + mdoc(metadata) + "]\n" + doc.prettyPrint(depth + 1) + "\n@/")
-            }
-        }
-      )
+      subdoc =>
+        def line(s: String) = if (subdoc.inline) s else prefix + s
+        (
+          subdoc.inline,
+          subdoc.sections.map {
+            case Primitive(s) => line(s)
+            case s: Separator.type => line(if (inline) "|" else "@@")
+            case complex @ Complex(Tag(ident, metadata), doc) =>
+              if (complex.complexity <= 10) {
+                line("@" + ident + "[" + doc.prettyPrint(depth + 1) + mdoc(metadata) + "]")
+              } else {
+                line("@[" + ident + mdoc(metadata) + "]\n" + doc.prettyPrint(depth + 1) + "\n@/")
+              }
+          }
+        )
     }
 
     subdocs.map{ case (inline, d) => d.mkString(if (inline) "" else "\n")}.mkString(if (inline) "" else "\n")
@@ -239,6 +253,16 @@ class Metadata private[pickle](private[pickle] override val sections: Vector[Com
 
 object Zipper {
   case class Edit(from: Int, to: Int, rebuild: Doc[Section] => Section)
+
+  implicit def ZipperMonoid[S <: Section]: Monoid[Zipper[S]] = new Monoid[Zipper[S]] {
+    val zero: Zipper[S] = Doc.empty[S].zipper
+    def append(s1: Zipper[S], s2: => Zipper[S]): Zipper[S] = s1 ++ s2
+  }
+
+  implicit def ZipperReducer[S <: Section]: Reducer[S, Zipper[S]] = new Reducer[S, Zipper[S]] {
+    override def cons(s: S, d: Zipper[S]) = s +: d
+    override def unit(s: S) = Doc(s).zipper
+  }
 }
 
 trait Zipper[+S <: Section] extends Doc[S] { outer =>
