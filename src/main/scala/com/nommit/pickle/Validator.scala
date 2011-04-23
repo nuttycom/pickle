@@ -1,6 +1,5 @@
 package com.nommit.pickle
 
-import com.nommit.salt.implicits._
 import scalaz._
 import Scalaz._
 

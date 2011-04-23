@@ -169,6 +169,11 @@ class ParserSpec extends Specification {
       }
     }
 
+    "parse a recipe" in {
+      val result = PickleParser.parse(SampleDocs.pancakes)
+      result must haveClass[PickleParser.Success[Doc[Section]]]
+    }
+
     "parse a document of just primitives" in {
       val sample = "123 45th St. @@ 678 90th St."
       PickleParser.parse(sample) must matchPickleParse(

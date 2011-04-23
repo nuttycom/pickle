@@ -23,6 +23,11 @@ class DocSpec extends Specification {
         doc.toMetadata must_== Metadata(Complex(Tag("a"), Doc.empty[Complex[Primitive]]))
       }
     }
+
+    //"pretty print correctly" in {
+    //  val pancakes = PickleParser.unsafeParse(SampleDocs.pancakes)
+    //
+    //}
   }
 
   "a metadata document" should {
@@ -44,7 +49,6 @@ class DocSpec extends Specification {
 
     "split correctly with leading separators" in {
       val result = Doc(Separator, Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c"), Separator, Primitive("d")).split(true)
-      println(result)
       result must_== Vector(
         Doc(Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c")) ,
         Doc(Primitive("d"))
@@ -53,11 +57,32 @@ class DocSpec extends Specification {
 
     "split correctly with trailing separators" in {
       val result = Doc(Primitive("a"), Primitive("b"), Separator, Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c"), Separator).split(true)
-      println(result)
       result must_== Vector(
         Doc(Primitive("a"), Primitive("b")),
         Doc(Complex(Tag("x"), Doc.empty[Primitive]), Primitive("c"))
       )
     }
+  }
+
+  "selecting parts of a document" should {
+    val pancakes = PickleParser.unsafeParse(SampleDocs.pancakes)
+
+    "filter" in {
+      val doc = PickleParser.unsafeParse("@a[@b[c] @b[c] @b[c] d] d")
+      val as = doc.select('a)
+      val b = Complex(Tag("b"), Doc(Primitive("c")))
+      as must_== Doc(Complex(Tag("a"), Doc(b, b, b, Primitive("d"))))
+    }
+
+    "descend" in {
+      import Traverse._
+      val doc = PickleParser.unsafeParse("@a[@b[c] @b[c] @b[c] d] d")
+      val as = doc.select('a > 'b)
+      val b = Complex(Tag("b"), Doc(Primitive("c")))
+      as must_== Doc(b, b, b)
+    }
+
+
+      //as.unselect must_== Doc(Complex(Tag("a"), Doc(b, b, b, Primitive("d"))), Primitive("d"))
   }
 }
