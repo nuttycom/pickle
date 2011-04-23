@@ -13,10 +13,13 @@ sealed trait Section {
    */
   private[pickle] def bloomFilters = Vector.empty[BloomFilter]
 
+  /**
+   * A heuristic measure of complexity used for pretty-printing.
+   */
   def complexity: Int
 }
 
-case class  Complex[+S <: Section](tag: Semantics, doc: Doc[S]) extends Section {
+case class Complex[+S <: Section](tag: Semantics, doc: Doc[S]) extends Section {
   private[pickle] override lazy val bloomFilters = tag match {
     case Tag(ident, metadata) => doc.bloomFilters.zipAll((BloomFilter.Empty + ident) +: metadata.bloomFilters, BloomFilter.Empty, BloomFilter.Empty) map {
       case (f1, f2) => f1 ++ f2
